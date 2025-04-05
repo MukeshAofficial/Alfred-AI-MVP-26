@@ -12,7 +12,6 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
-import VendorNavigation from "@/components/vendor/vendor-navigation"
 
 interface Booking {
   id: string
@@ -240,8 +239,7 @@ export default function VendorBookingsPage() {
   const uniqueDates = [...new Set(bookings.map((booking) => booking.date))].sort()
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <VendorNavigation />
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="container py-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>

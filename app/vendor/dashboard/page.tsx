@@ -6,7 +6,6 @@ import { BarChart3, Calendar, Clock, DollarSign, Package, PlusCircle, Star, User
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
-import VendorNavigation from "@/components/vendor/vendor-navigation"
 
 export default function VendorDashboardPage() {
   const [activeTab, setActiveTab] = useState("overview")
@@ -139,9 +138,7 @@ export default function VendorDashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <VendorNavigation />
-
-      <div className="p-4 sm:p-6 md:p-8 md:ml-64">
+      <div className="p-4 sm:p-6 md:p-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Vendor Dashboard</h1>

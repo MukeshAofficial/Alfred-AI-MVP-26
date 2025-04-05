@@ -1,199 +1,276 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Upload, Hotel, Mail, Lock, ArrowRight } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useToast } from "@/hooks/use-toast"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Loader2 } from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
+import { Textarea } from "@/components/ui/textarea"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 
-export default function RegisterPage() {
-  const [isLoading, setIsLoading] = useState(false)
-  const [formData, setFormData] = useState({
-    hotelName: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-  })
-  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+export default function HotelRegistrationDetailsPage() {
+  const { profile, refreshProfile } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
+  const supabase = createClientComponentClient()
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
+  const [hotelDetails, setHotelDetails] = useState({
+    hotelName: "",
+    description: "",
+    address: "",
+    amenities: "",
+    phone: "",
+    website: "",
+    logo: "",
+  })
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setLogoPreview(e.target?.result as string)
+  // Redirect if not logged in or not an admin
+  useEffect(() => {
+    if (!profile) {
+      router.push("/login")
+    } else if (profile.role !== "admin") {
+      router.push("/403")
+    } else {
+      // Pre-fill form with existing data if available
+      if (profile.full_name) {
+        setHotelDetails(prev => ({
+          ...prev,
+          hotelName: profile.full_name
+        }))
       }
-      reader.readAsDataURL(file)
+      if (profile.phone) {
+        setHotelDetails(prev => ({
+          ...prev,
+          phone: profile.phone
+        }))
+      }
     }
-  }
+  }, [profile, router])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setIsLoading(true)
+    setError(null)
 
-    if (formData.password !== formData.confirmPassword) {
+    try {
+      if (!profile?.id) {
+        throw new Error("User profile not found")
+      }
+
+      // First update the profile with the hotel name
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({
+          full_name: hotelDetails.hotelName,
+          phone: hotelDetails.phone,
+        })
+        .eq("id", profile.id)
+
+      if (profileError) {
+        throw profileError
+      }
+
+      // Parse amenities from textarea to JSON array
+      const amenitiesArray = hotelDetails.amenities
+        .split(',')
+        .map(item => item.trim())
+        .filter(item => item.length > 0)
+
+      // Check if hotel record already exists
+      const { data: existingHotel } = await supabase
+        .from("hotels")
+        .select("id")
+        .eq("admin_id", profile.id)
+        .single()
+
+      let hotelId = existingHotel?.id
+
+      // If no hotel record exists, create one
+      if (!hotelId) {
+        const { data: newHotel, error: hotelError } = await supabase
+          .from("hotels")
+          .insert({
+            admin_id: profile.id,
+            name: hotelDetails.hotelName,
+            address: hotelDetails.address,
+            description: hotelDetails.description,
+            amenities: amenitiesArray.length > 0 ? amenitiesArray : null,
+            images: hotelDetails.logo ? [hotelDetails.logo] : [],
+          })
+          .select()
+
+        if (hotelError) {
+          throw hotelError
+        }
+
+        hotelId = newHotel?.[0]?.id
+      } else {
+        // Update existing hotel record
+        const { error: updateError } = await supabase
+          .from("hotels")
+          .update({
+            name: hotelDetails.hotelName,
+            address: hotelDetails.address,
+            description: hotelDetails.description,
+            amenities: amenitiesArray.length > 0 ? amenitiesArray : null,
+            images: hotelDetails.logo ? [hotelDetails.logo] : [],
+          })
+          .eq("id", hotelId)
+
+        if (updateError) {
+          throw updateError
+        }
+      }
+
+      await refreshProfile()
+
       toast({
-        title: "Passwords don't match",
-        description: "Please make sure your passwords match.",
+        title: "Registration completed",
+        description: "Your hotel details have been saved successfully.",
+      })
+
+      // Redirect to admin dashboard
+      router.push("/admin/dashboard")
+    } catch (err: any) {
+      console.error("Error saving hotel details:", err)
+      setError(err.message || "An unexpected error occurred")
+      toast({
+        title: "Registration failed",
+        description: err.message || "An unexpected error occurred",
         variant: "destructive",
       })
-      return
-    }
-
-    setIsLoading(true)
-
-    // Simulate API call
-    setTimeout(() => {
+    } finally {
       setIsLoading(false)
-      toast({
-        title: "Registration successful",
-        description: "Your hotel has been registered. Redirecting to service setup...",
-      })
+    }
+  }
 
-      // Redirect to service upload page
-      router.push("/admin/upload-services")
-    }, 1500)
+  if (!profile) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
   }
 
   return (
-    <div className="container flex items-center justify-center min-h-screen py-8">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-2xl font-bold">Register Your Hotel</CardTitle>
-          <CardDescription>Create an account to manage your hotel services</CardDescription>
+    <div className="container max-w-2xl mx-auto py-12 px-4">
+      <Card>
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold">Complete your hotel profile</CardTitle>
+          <CardDescription>Provide additional details about your hotel to start managing services</CardDescription>
         </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="logo-upload" className="block text-center">
-                Hotel Logo
-              </Label>
-              <div className="flex flex-col items-center justify-center">
-                <div className="relative w-24 h-24 mb-2">
-                  {logoPreview ? (
-                    <div
-                      className="w-full h-full rounded-full bg-cover bg-center border-2 border-blue-200"
-                      style={{ backgroundImage: `url(${logoPreview})` }}
-                    />
-                  ) : (
-                    <div className="w-full h-full rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center border-2 border-dashed border-blue-200">
-                      <Hotel className="h-10 w-10 text-blue-500" />
-                    </div>
-                  )}
-                  <div className="absolute bottom-0 right-0 bg-blue-600 rounded-full p-1 shadow-md">
-                    <Upload className="h-4 w-4 text-white" />
-                  </div>
-                </div>
-                <Input id="logo-upload" type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="text-xs"
-                  onClick={() => document.getElementById("logo-upload")?.click()}
-                >
-                  Upload Logo
-                </Button>
-              </div>
-            </div>
-
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="hotelName">Hotel Name</Label>
-              <div className="relative">
-                <Hotel className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="hotelName"
-                  name="hotelName"
-                  placeholder="Luxury Grand Hotel"
-                  className="pl-10"
-                  value={formData.hotelName}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
+              <Input
+                id="hotelName"
+                placeholder="Luxury Hotel & Spa"
+                value={hotelDetails.hotelName}
+                onChange={(e) => setHotelDetails({ ...hotelDetails, hotelName: e.target.value })}
+                required
+              />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  placeholder="manager@hotel.com"
-                  className="pl-10"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
+              <Label htmlFor="description">Hotel Description</Label>
+              <Textarea
+                id="description"
+                placeholder="Tell guests about your hotel and the experience you offer..."
+                value={hotelDetails.description}
+                onChange={(e) => setHotelDetails({ ...hotelDetails, description: e.target.value })}
+                rows={4}
+                required
+              />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  placeholder="••••••••"
-                  className="pl-10"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                  minLength={8}
-                />
-              </div>
+              <Label htmlFor="address">Hotel Address</Label>
+              <Textarea
+                id="address"
+                placeholder="123 Luxury Avenue, City, Country"
+                value={hotelDetails.address}
+                onChange={(e) => setHotelDetails({ ...hotelDetails, address: e.target.value })}
+                rows={2}
+                required
+              />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  placeholder="••••••••"
-                  className="pl-10"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  required
-                  minLength={8}
-                />
-              </div>
+              <Label htmlFor="amenities">Amenities</Label>
+              <Textarea
+                id="amenities"
+                placeholder="Enter amenities separated by commas (e.g., Pool, Spa, Restaurant, Gym)"
+                value={hotelDetails.amenities}
+                onChange={(e) => setHotelDetails({ ...hotelDetails, amenities: e.target.value })}
+                rows={3}
+              />
+              <p className="text-sm text-muted-foreground">
+                List the amenities your hotel offers, separated by commas.
+              </p>
             </div>
-          </CardContent>
 
-          <CardFooter>
-            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Contact Phone</Label>
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="+1 (555) 123-4567"
+                value={hotelDetails.phone}
+                onChange={(e) => setHotelDetails({ ...hotelDetails, phone: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="website">Website (Optional)</Label>
+              <Input
+                id="website"
+                type="url"
+                placeholder="https://yourhotel.com"
+                value={hotelDetails.website}
+                onChange={(e) => setHotelDetails({ ...hotelDetails, website: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="logo">Logo URL (Optional)</Label>
+              <Input
+                id="logo"
+                placeholder="https://yourhotel.com/logo.png"
+                value={hotelDetails.logo}
+                onChange={(e) => setHotelDetails({ ...hotelDetails, logo: e.target.value })}
+              />
+              <p className="text-sm text-muted-foreground">
+                Provide a URL to your hotel logo image. We'll add image upload functionality soon.
+              </p>
+            </div>
+
+            {error && <div className="rounded-md bg-red-50 p-2 text-sm text-red-500">{error}</div>}
+
+            <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? (
-                <div className="flex items-center">
-                  <div className="animate-spin mr-2 h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
-                  Registering...
-                </div>
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving details...
+                </>
               ) : (
-                <div className="flex items-center">
-                  Register
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </div>
+                "Complete Registration"
               )}
             </Button>
-          </CardFooter>
-        </form>
+          </form>
+        </CardContent>
+        <CardFooter>
+          <p className="text-sm text-muted-foreground">
+            Your hotel details will be visible to guests using our platform. You can update this information anytime from your admin dashboard.
+          </p>
+        </CardFooter>
       </Card>
     </div>
   )

@@ -11,7 +11,7 @@ export async function middleware(req: NextRequest) {
   } = await supabase.auth.getSession()
 
   // Public routes that don't require authentication
-  const publicRoutes = ["/", "/login", "/guest/register", "/admin/pre-register", "/vendor/pre-register"]
+  const publicRoutes = ["/", "/login", "/register", "/guest/register", "/admin/pre-register", "/vendor/pre-register"]
   const isPublicRoute =
     publicRoutes.some((route) => req.nextUrl.pathname === route) ||
     req.nextUrl.pathname.startsWith("/services") ||
@@ -66,6 +66,7 @@ export async function middleware(req: NextRequest) {
     // Redirect to appropriate dashboard if user is already logged in and tries to access login/register pages
     if (
       req.nextUrl.pathname === "/login" ||
+      req.nextUrl.pathname === "/register" ||
       req.nextUrl.pathname === "/guest/register" ||
       req.nextUrl.pathname === "/admin/pre-register" ||
       req.nextUrl.pathname === "/vendor/pre-register"
@@ -119,6 +120,7 @@ export const config = {
   matcher: [
     '/',
     '/login',
+    '/register',
     '/explore',
     '/admin/:path*',
     '/vendor/:path*',

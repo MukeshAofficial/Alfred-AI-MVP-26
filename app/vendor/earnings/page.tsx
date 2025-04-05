@@ -8,7 +8,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
-import VendorNavigation from "@/components/vendor/vendor-navigation"
 
 interface Transaction {
   id: string
@@ -171,8 +170,7 @@ export default function VendorEarningsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <VendorNavigation />
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="container py-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>

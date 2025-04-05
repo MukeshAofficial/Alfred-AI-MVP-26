@@ -6,11 +6,12 @@ import { usePathname } from "next/navigation"
 import { Menu, Home, Calendar, Hotel, Users, Settings, LogOut, Moon, Sun, Bell } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useTheme } from "next-themes"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/contexts/auth-context"
+import SignOutButton from "@/components/SignOutButton"
 
 export default function AdminNavigation() {
   const pathname = usePathname()
@@ -58,6 +59,8 @@ export default function AdminNavigation() {
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-[240px] sm:w-[300px]">
+              <SheetTitle className="sr-only">Admin Navigation</SheetTitle>
+              <SheetDescription className="sr-only">Navigation menu for hotel administration</SheetDescription>
               <div className="flex flex-col h-full">
                 <div className="flex items-center gap-2 py-4">
                   <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">
@@ -94,14 +97,10 @@ export default function AdminNavigation() {
                 </nav>
 
                 <div className="border-t py-4">
-                  <Button
+                  <SignOutButton
                     variant="ghost"
                     className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-                    onClick={signOut}
-                  >
-                    <LogOut className="h-5 w-5 mr-2" />
-                    Logout
-                  </Button>
+                  />
                 </div>
               </div>
             </SheetContent>
@@ -163,7 +162,13 @@ export default function AdminNavigation() {
             <DropdownMenuContent align="end">
               <DropdownMenuItem>Profile</DropdownMenuItem>
               <DropdownMenuItem>Settings</DropdownMenuItem>
-              <DropdownMenuItem onClick={signOut} className="text-red-600 dark:text-red-400">Logout</DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <SignOutButton 
+                  variant="ghost"
+                  className="w-full justify-start text-red-600 dark:text-red-400"
+                  withIcon={true}
+                />
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

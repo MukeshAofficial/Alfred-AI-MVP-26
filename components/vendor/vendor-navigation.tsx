@@ -21,11 +21,12 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useTheme } from "next-themes"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/contexts/auth-context"
+import SignOutButton from "@/components/SignOutButton"
 
 export default function VendorNavigation() {
   const pathname = usePathname()
@@ -75,6 +76,8 @@ export default function VendorNavigation() {
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-[240px] sm:w-[300px]">
+              <SheetTitle className="sr-only">Vendor Navigation</SheetTitle>
+              <SheetDescription className="sr-only">Navigation menu for vendor services</SheetDescription>
               <div className="flex flex-col h-full">
                 <div className="flex items-center justify-between py-4">
                   <div className="flex items-center gap-2">
@@ -116,14 +119,10 @@ export default function VendorNavigation() {
                 </nav>
 
                 <div className="border-t py-4">
-                  <Button
+                  <SignOutButton
                     variant="ghost"
                     className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-                    onClick={signOut}
-                  >
-                    <LogOut className="h-5 w-5 mr-2" />
-                    Logout
-                  </Button>
+                  />
                 </div>
               </div>
             </SheetContent>
@@ -195,9 +194,12 @@ export default function VendorNavigation() {
                   Settings
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem className="text-red-600 dark:text-red-400" onClick={signOut}>
-                <LogOut className="mr-2 h-4 w-4" />
-                Logout
+              <DropdownMenuItem asChild>
+                <SignOutButton 
+                  variant="ghost"
+                  className="w-full justify-start text-red-600 dark:text-red-400"
+                  withIcon={true}
+                />
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

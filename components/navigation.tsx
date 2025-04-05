@@ -5,10 +5,11 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { MessageSquare, Bell, Calendar, Compass, User, Menu, LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { useMobile } from "@/hooks/use-mobile"
 import { useAuth } from "@/contexts/auth-context"
+import SignOutButton from "@/components/SignOutButton"
 
 export default function Navigation() {
   const pathname = usePathname()
@@ -131,14 +132,11 @@ export default function Navigation() {
             })}
             
             {/* Sign Out Button */}
-            <Button 
+            <SignOutButton 
               variant="ghost" 
               className="flex items-center gap-2 text-muted-foreground hover:text-primary hover:bg-primary/5"
-              onClick={signOut}
-            >
-              <LogOut className="w-5 h-5" />
-              <span>Sign Out</span>
-            </Button>
+              withIcon={true}
+            />
           </div>
 
           {/* Mobile Menu Button */}
@@ -150,6 +148,8 @@ export default function Navigation() {
                 </Button>
               </SheetTrigger>
               <SheetContent side="right">
+                <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+                <SheetDescription className="sr-only">Main navigation menu for guest users</SheetDescription>
                 <div className="flex flex-col space-y-4 mt-8">
                   {navItems.map((item) => {
                     const Icon = item.icon
@@ -173,14 +173,11 @@ export default function Navigation() {
                   })}
                   
                   {/* Sign Out Button in mobile menu */}
-                  <Button 
+                  <SignOutButton 
                     variant="ghost" 
                     className="flex items-center justify-start gap-3 px-4 py-3 rounded-md transition-all text-muted-foreground hover:text-primary hover:bg-primary/5"
-                    onClick={signOut}
-                  >
-                    <LogOut className="w-5 h-5" />
-                    <span>Sign Out</span>
-                  </Button>
+                    withIcon={true}
+                  />
                 </div>
               </SheetContent>
             </Sheet>

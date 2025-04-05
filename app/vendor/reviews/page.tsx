@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
-import VendorNavigation from "@/components/vendor/vendor-navigation"
 
 interface Review {
   id: string
@@ -230,8 +229,7 @@ export default function VendorReviewsPage() {
   })
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <VendorNavigation />
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="container py-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>

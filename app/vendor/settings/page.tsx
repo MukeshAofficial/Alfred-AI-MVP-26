@@ -28,7 +28,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
-import VendorNavigation from "@/components/vendor/vendor-navigation"
 
 export default function VendorSettingsPage() {
   const { toast } = useToast()
@@ -144,7 +143,6 @@ export default function VendorSettingsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <VendorNavigation />
       <div className="container py-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
