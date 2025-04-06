@@ -2,24 +2,31 @@
 
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, CreditCard, Loader2 } from "lucide-react"
+import { ArrowLeft, CreditCard, Loader2, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ServicesDB, ServiceData } from "@/lib/services-db"
 import { createCheckoutSession } from "@/lib/actions"
 import { useToast } from "@/components/ui/use-toast"
 import Header from "@/components/header"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { useAuth } from "@/contexts/auth-context"
 
 export default function CheckoutPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const serviceId = searchParams.get("serviceId")
   const { toast } = useToast()
+  const { user } = useAuth()
   
   const [service, setService] = useState<ServiceData | null>(null)
   const [loading, setLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [bookingDate, setBookingDate] = useState<string>(
+    new Date().toISOString().split('T')[0]
+  )
 
   // Check for cancel status from returned Stripe session
   const canceled = searchParams.get("canceled")
@@ -69,12 +76,38 @@ export default function CheckoutPage() {
     }
 
     setIsProcessing(true)
-    
+
     try {
+      // Format the booking date for URL parameter and ensure it's valid
+      const bookingDateParam = bookingDate || new Date().toISOString().split('T')[0]
+      console.log(`Using booking date: ${bookingDateParam}, user: ${user?.id || 'guest'}`)
+
+      // Make sure service ID is provided
+      if (!serviceId) {
+        throw new Error("Service ID is required for checkout")
+      }
+
       // Call server action to create Stripe Checkout session
-      const { sessionUrl } = await createCheckoutSession(serviceId)
+      const { sessionUrl, sessionId } = await createCheckoutSession({
+        serviceId,
+        bookingDate: bookingDateParam,
+        userId: user?.id || 'guest'
+      })
       
       if (sessionUrl) {
+        console.log('Checkout session created, redirecting to:', sessionUrl)
+        
+        // Store the session ID and booking info in localStorage for fallback
+        if (sessionId) {
+          localStorage.setItem('lastCheckoutSession', JSON.stringify({
+            sessionId,
+            serviceId,
+            userId: user?.id || 'guest',
+            bookingDate: bookingDateParam,
+            timestamp: Date.now()
+          }));
+        }
+        
         // Redirect to Stripe Checkout
         window.location.href = sessionUrl
       } else {
@@ -127,27 +160,45 @@ export default function CheckoutPage() {
                       <p className="text-sm text-muted-foreground mt-1">{service.business_name || "Service Provider"}</p>
                     </div>
 
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Service Price</span>
-                        <span className="font-medium">{service.currency} {service.price.toFixed(2)}</span>
+                    <div className="space-y-4">
+                      {/* Booking Date Selector */}
+                      <div className="space-y-2">
+                        <Label htmlFor="bookingDate">
+                          <Calendar className="h-4 w-4 inline mr-1" />
+                          Booking Date
+                        </Label>
+                        <Input
+                          id="bookingDate"
+                          type="date"
+                          value={bookingDate}
+                          onChange={(e) => setBookingDate(e.target.value)}
+                          min={new Date().toISOString().split('T')[0]}
+                          className="w-full"
+                        />
                       </div>
-                      {service.duration && (
+
+                      <div className="space-y-2">
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Duration</span>
-                          <span>{service.duration} minutes</span>
+                          <span className="text-muted-foreground">Service Price</span>
+                          <span className="font-medium">{service.currency} {service.price.toFixed(2)}</span>
                         </div>
-                      )}
-                      {service.location && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Location</span>
-                          <span>{service.location}</span>
-                        </div>
-                      )}
-                      <div className="border-t mt-4 pt-4">
-                        <div className="flex justify-between font-semibold">
-                          <span>Total</span>
-                          <span>{service.currency} {service.price.toFixed(2)}</span>
+                        {service.duration && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Duration</span>
+                            <span>{service.duration} minutes</span>
+                          </div>
+                        )}
+                        {service.location && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Location</span>
+                            <span>{service.location}</span>
+                          </div>
+                        )}
+                        <div className="border-t mt-4 pt-4">
+                          <div className="flex justify-between font-semibold">
+                            <span>Total</span>
+                            <span>{service.currency} {service.price.toFixed(2)}</span>
+                          </div>
                         </div>
                       </div>
                     </div>

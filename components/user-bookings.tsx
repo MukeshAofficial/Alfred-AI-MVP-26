@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
-import { Calendar, Clock, MapPin, Users, CreditCard, ArrowRight, Edit, X } from "lucide-react"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
+import { Calendar, Clock, MapPin, Users, CreditCard, ArrowRight, Edit, X, Loader2, RefreshCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -17,111 +18,123 @@ import {
 } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/components/ui/use-toast"
+import { BookingsDB, BookingData } from "@/lib/bookings-db"
+import { useAuth } from "@/contexts/auth-context"
 
-interface Booking {
-  id: string
-  service: string
-  category: string
-  date: string
-  time: string
-  guests: number
-  price: string
-  status: "upcoming" | "past" | "cancelled"
-  location: string
-  reference: string
+interface UserBookingsProps {
+  compactMode?: boolean;
 }
 
-export default function UserBookings() {
-  const [activeTab, setActiveTab] = useState("upcoming")
+export default function UserBookings({ compactMode = false }: UserBookingsProps) {
+  const [activeTab, setActiveTab] = useState("confirmed")
   const { toast } = useToast()
+  const { profile } = useAuth()
+  const [bookings, setBookings] = useState<BookingData[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const searchParams = useSearchParams()
 
-  // Mock bookings data
-  const [bookings, setBookings] = useState<Booking[]>([
-    {
-      id: "b1",
-      service: "Signature Massage",
-      category: "spa",
-      date: "2025-04-02",
-      time: "10:30 AM",
-      guests: 1,
-      price: "120.00",
-      status: "upcoming",
-      location: "Spa & Wellness Center, 2nd Floor",
-      reference: "SPA12345",
-    },
-    {
-      id: "b2",
-      service: "Main Restaurant",
-      category: "dining",
-      date: "2025-04-01",
-      time: "7:00 PM",
-      guests: 2,
-      price: "170.00",
-      status: "upcoming",
-      location: "Main Restaurant, Lobby Level",
-      reference: "DIN54321",
-    },
-    {
-      id: "b3",
-      service: "City Tour",
-      category: "activities",
-      date: "2025-03-30",
-      time: "9:00 AM",
-      guests: 2,
-      price: "130.00",
-      status: "past",
-      location: "Meet at Hotel Lobby",
-      reference: "ACT78901",
-    },
-    {
-      id: "b4",
-      service: "Airport Transfer",
-      category: "transport",
-      date: "2025-04-02",
-      time: "11:00 AM",
-      guests: 2,
-      price: "75.00",
-      status: "upcoming",
-      location: "Hotel Entrance",
-      reference: "TRN23456",
-    },
-    {
-      id: "b5",
-      service: "Luxury Facial",
-      category: "spa",
-      date: "2025-03-29",
-      time: "2:00 PM",
-      guests: 1,
-      price: "150.00",
-      status: "past",
-      location: "Spa & Wellness Center, 2nd Floor",
-      reference: "SPA67890",
-    },
-    {
-      id: "b6",
-      service: "Yacht Excursion",
-      category: "activities",
-      date: "2025-03-28",
-      time: "10:00 AM",
-      guests: 4,
-      price: "1000.00",
-      status: "cancelled",
-      location: "Marina Dock B",
-      reference: "ACT34567",
-    },
-  ])
+  useEffect(() => {
+    // Check for success parameter in URL (coming from Stripe success redirect)
+    const success = searchParams?.get('success')
+    const sessionId = searchParams?.get('session_id')
+    const bookingDate = searchParams?.get('booking_date')
+    
+    if (success === 'true' && sessionId) {
+      console.log(`Detected successful payment with session ID: ${sessionId}`);
+      
+      toast({
+        title: "Booking Confirmed!",
+        description: "Your payment was successful and your booking has been confirmed.",
+        variant: "default",
+      })
+      
+      // Force refresh bookings when coming from successful checkout
+      if (profile?.id) {
+        console.log(`Refreshing bookings for user ${profile.id} after successful payment`);
+        fetchUserBookings(profile.id)
+      }
+    }
+  }, [searchParams, toast, profile?.id])
+
+  useEffect(() => {
+    if (profile?.id) {
+      console.log(`Initial booking fetch for user: ${profile.id}`);
+      fetchUserBookings(profile.id)
+    } else {
+      console.log('No user profile ID available to fetch bookings');
+      setIsLoading(false);
+    }
+  }, [profile?.id])
+
+  const fetchUserBookings = async (userId: string) => {
+    console.log(`Starting to fetch bookings for user: ${userId}`);
+    setIsLoading(true)
+    setError(null)
+    try {
+      const bookingsDB = new BookingsDB()
+      console.log('BookingsDB instance created');
+      const data = await bookingsDB.getUserBookings(userId)
+      console.log(`Successfully fetched ${data.length} bookings`);
+      setBookings(data)
+      
+      // If we got zero bookings, check if there's a recent checkout session that might need fallback processing
+      if (data.length === 0) {
+        const lastSessionStr = localStorage.getItem('lastCheckoutSession');
+        
+        if (lastSessionStr) {
+          try {
+            const lastSession = JSON.parse(lastSessionStr);
+            const sessionAge = Date.now() - lastSession.timestamp;
+            
+            // If the session is less than 30 minutes old and we have no bookings, show a helpful message
+            if (sessionAge < 30 * 60 * 1000) {
+              console.log('Recent checkout session found with no bookings - might need fallback processing');
+              toast({
+                title: "Recent booking found",
+                description: "You have a recent checkout that might still be processing. Try refreshing in a moment.",
+                duration: 6000,
+              });
+            }
+          } catch (e) {
+            console.error('Error parsing last checkout session:', e);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error("Error fetching bookings:", err)
+      console.error("Error details:", err.message || "Unknown error");
+      if (err.stack) {
+        console.error("Stack trace:", err.stack);
+      }
+      setError(err.message || "Failed to load bookings")
+    } finally {
+      setIsLoading(false)
+      setIsRefreshing(false)
+    }
+  }
+
+  const refreshBookings = () => {
+    if (profile?.id) {
+      setIsRefreshing(true);
+      fetchUserBookings(profile.id);
+    }
+  }
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
       case "spa":
         return <Calendar className="h-4 w-4" />
-      case "dining":
+      case "restaurant":
         return <Clock className="h-4 w-4" />
-      case "activities":
+      case "tour":
         return <MapPin className="h-4 w-4" />
       case "transport":
         return <Users className="h-4 w-4" />
+      case "entertainment":
+        return <Calendar className="h-4 w-4" />
       default:
         return <Calendar className="h-4 w-4" />
     }
@@ -129,24 +142,45 @@ export default function UserBookings() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "upcoming":
+      case "confirmed":
         return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-      case "past":
-        return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
-      case "cancelled":
+      case "completed":
+        return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+      case "canceled":
         return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+      case "pending":
+        return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+      case "rescheduled":
+        return "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
       default:
         return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
     }
   }
 
-  const cancelBooking = (id: string) => {
-    setBookings((prev) => prev.map((booking) => (booking.id === id ? { ...booking, status: "cancelled" } : booking)))
+  const cancelBooking = async (id: string) => {
+    try {
+      const bookingsDB = new BookingsDB()
+      await bookingsDB.updateBookingStatus(id, "canceled")
+      
+      // Update local state
+      setBookings(prevBookings => 
+        prevBookings.map(booking => 
+          booking.id === id ? { ...booking, status: "canceled" } : booking
+        )
+      )
 
     toast({
       title: "Booking Cancelled",
       description: "Your booking has been cancelled successfully.",
     })
+    } catch (err: any) {
+      console.error("Error cancelling booking:", err)
+      toast({
+        title: "Error",
+        description: "Failed to cancel booking. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
   const requestAddOn = (id: string, addon: string) => {
@@ -157,6 +191,8 @@ export default function UserBookings() {
   }
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return "Not scheduled"
+    
     const options: Intl.DateTimeFormatOptions = {
       weekday: "long",
       month: "long",
@@ -167,26 +203,89 @@ export default function UserBookings() {
   }
 
   // Filter bookings based on active tab
-  const filteredBookings = bookings.filter((booking) => booking.status === activeTab)
+  const filteredBookings = bookings.filter(booking => booking.status === activeTab)
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground">Loading your bookings...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-red-500 mb-2">Error loading bookings</p>
+        <p className="text-muted-foreground mb-4">{error}</p>
+        <Button variant="outline" onClick={() => profile?.id && fetchUserBookings(profile.id)}>
+          Try Again
+        </Button>
+      </div>
+    )
+  }
+
+  if (bookings.length === 0) {
+    return (
+      <div className="text-center py-8 px-4">
+        <p className="text-muted-foreground mb-6">You don't have any bookings yet</p>
+        
+        <div className="flex flex-col items-center space-y-4">
+          <Button variant="outline" onClick={refreshBookings} disabled={isRefreshing}>
+            {isRefreshing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <RefreshCcw className="h-4 w-4 mr-2" />
+                Refresh Bookings
+              </>
+            )}
+          </Button>
+          
+          <Button variant="default" onClick={() => window.location.href = "/services"}>
+            Browse Services
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="container max-w-md mx-auto p-4 pb-20">
+    <div className={cn("container mx-auto pb-20", compactMode ? "p-0" : "max-w-md p-4")}>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-3 mb-4">
-          <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-          <TabsTrigger value="past">Past</TabsTrigger>
-          <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
+        <div className="flex justify-between items-center mb-4">
+          <TabsList className="grid grid-cols-5">
+            <TabsTrigger value="confirmed">Confirmed</TabsTrigger>
+            <TabsTrigger value="pending">Pending</TabsTrigger>
+            <TabsTrigger value="completed">Completed</TabsTrigger>
+            <TabsTrigger value="canceled">Canceled</TabsTrigger>
+            <TabsTrigger value="rescheduled">Rescheduled</TabsTrigger>
         </TabsList>
+          
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={refreshBookings}
+            disabled={isRefreshing}
+            className="ml-2"
+          >
+            {isRefreshing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCcw className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
 
         <TabsContent value={activeTab} className="mt-0">
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <h2 className="text-lg font-medium">
-                {activeTab === "upcoming"
-                  ? "Upcoming Bookings"
-                  : activeTab === "past"
-                    ? "Past Bookings"
-                    : "Cancelled Bookings"}
+                {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Bookings
               </h2>
               <p className="text-sm text-muted-foreground">
                 {filteredBookings.length} {filteredBookings.length === 1 ? "booking" : "bookings"}
@@ -196,209 +295,101 @@ export default function UserBookings() {
             {filteredBookings.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-muted-foreground">No {activeTab} bookings found</p>
-                {activeTab !== "upcoming" && (
-                  <Button variant="outline" className="mt-4" onClick={() => setActiveTab("upcoming")}>
-                    View Upcoming Bookings
+                {activeTab !== "confirmed" && (
+                  <Button variant="outline" className="mt-4" onClick={() => setActiveTab("confirmed")}>
+                    View Confirmed Bookings
                   </Button>
                 )}
               </div>
             ) : (
               <div className="space-y-4">
                 {filteredBookings.map((booking) => (
-                  <Card
-                    key={booking.id}
-                    className={cn(
-                      "overflow-hidden",
-                      booking.status === "cancelled" && "border-red-200 dark:border-red-800",
-                    )}
-                  >
+                  <Card key={booking.id} className="overflow-hidden">
                     <CardContent className="p-0">
                       <div className="p-4">
-                        <div className="flex justify-between items-start">
+                        <div className="flex justify-between items-start mb-3">
                           <div>
-                            <h3 className="font-medium">{booking.service}</h3>
-                            <p className="text-sm text-muted-foreground">{booking.location}</p>
+                            <h3 className="font-semibold">{booking.service_name}</h3>
+                            <p className="text-sm text-muted-foreground">{booking.service_category}</p>
                           </div>
-                          <Badge variant="outline" className={cn(getStatusColor(booking.status))}>
-                            {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                          <Badge className={cn("font-normal", getStatusColor(booking.status))}>
+                            {booking.status}
                           </Badge>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2 mt-3 text-sm">
+                        <div className="grid grid-cols-2 gap-3 text-sm mb-4">
                           <div className="flex items-center">
-                            <Calendar className="h-4 w-4 mr-1 text-muted-foreground" />
-                            <span>{formatDate(booking.date)}</span>
+                            <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
+                            <span>{booking.booking_date ? formatDate(booking.booking_date) : "Not scheduled"}</span>
                           </div>
                           <div className="flex items-center">
-                            <Clock className="h-4 w-4 mr-1 text-muted-foreground" />
-                            <span>{booking.time}</span>
+                            <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
+                            <span>{booking.metadata?.time || "Not specified"}</span>
+                          </div>
+                          {booking.service_location && (
+                            <div className="flex items-center col-span-2">
+                              <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
+                              <span>{booking.service_location}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center">
+                            <CreditCard className="h-4 w-4 mr-2 text-muted-foreground" />
+                            <span>{booking.currency || booking.service_currency} {booking.amount_paid || booking.service_price}</span>
                           </div>
                           <div className="flex items-center">
-                            <Users className="h-4 w-4 mr-1 text-muted-foreground" />
-                            <span>
-                              {booking.guests} {booking.guests === 1 ? "Guest" : "Guests"}
-                            </span>
-                          </div>
-                          <div className="flex items-center">
-                            <CreditCard className="h-4 w-4 mr-1 text-muted-foreground" />
-                            <span>${booking.price}</span>
+                            <span className="text-xs text-muted-foreground">Ref: {booking.id.substring(0, 8)}</span>
                           </div>
                         </div>
 
-                        <div className="mt-3 text-xs text-muted-foreground">Reference: {booking.reference}</div>
-                      </div>
-
-                      {booking.status === "upcoming" && (
-                        <div className="border-t p-3 bg-muted/20 flex justify-between items-center">
+                        <div className="flex items-center justify-between border-t pt-3">
+                          {activeTab === "confirmed" && (
                           <Dialog>
                             <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                View Details
+                                <Button variant="outline" size="sm" className="h-8">
+                                  <X className="h-3.5 w-3.5 mr-1" />
+                                  Cancel
                               </Button>
                             </DialogTrigger>
                             <DialogContent>
                               <DialogHeader>
-                                <DialogTitle>Booking Details</DialogTitle>
+                                  <DialogTitle>Cancel Booking</DialogTitle>
                                 <DialogDescription>
-                                  {booking.service} - {booking.reference}
+                                    Are you sure you want to cancel this booking? This action cannot be undone.
                                 </DialogDescription>
                               </DialogHeader>
-
-                              <div className="space-y-4 py-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Date</p>
-                                    <p className="font-medium">{formatDate(booking.date)}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Time</p>
-                                    <p className="font-medium">{booking.time}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Guests</p>
-                                    <p className="font-medium">{booking.guests}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">Total</p>
-                                    <p className="font-medium">${booking.price}</p>
-                                  </div>
-                                </div>
-
-                                <div>
-                                  <p className="text-sm text-muted-foreground">Location</p>
-                                  <p className="font-medium">{booking.location}</p>
-                                </div>
-
-                                <div>
-                                  <p className="text-sm text-muted-foreground">Reference Number</p>
-                                  <p className="font-medium">{booking.reference}</p>
-                                </div>
-
-                                <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 p-3 border border-blue-200 dark:border-blue-800">
-                                  <h4 className="text-sm font-medium text-blue-700 dark:text-blue-400">
-                                    Special Instructions
-                                  </h4>
-                                  <p className="text-sm mt-1">
-                                    Please arrive 15 minutes before your scheduled time. Bring your room key for
-                                    verification.
-                                  </p>
-                                </div>
-                              </div>
-
-                              <DialogFooter className="flex flex-col sm:flex-row gap-2">
-                                <Button variant="outline" className="flex-1" onClick={() => cancelBooking(booking.id)}>
-                                  <X className="mr-2 h-4 w-4" />
+                                <DialogFooter>
+                                  <Button variant="outline" onClick={() => {}}>
+                                    Keep Booking
+                                  </Button>
+                                  <Button variant="destructive" onClick={() => cancelBooking(booking.id)}>
                                   Cancel Booking
-                                </Button>
-                                <Button className="flex-1 bg-blue-600 hover:bg-blue-700">
-                                  <Edit className="mr-2 h-4 w-4" />
-                                  Modify Booking
                                 </Button>
                               </DialogFooter>
                             </DialogContent>
                           </Dialog>
+                          )}
 
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="outline" size="sm">
+                              <Button variant="outline" size="sm" className="ml-auto h-8">
                                 Add-ons
-                                <ArrowRight className="ml-2 h-4 w-4" />
+                                <ArrowRight className="h-3.5 w-3.5 ml-1" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              {booking.category === "spa" && (
-                                <>
-                                  <DropdownMenuItem onClick={() => requestAddOn(booking.id, "Aromatherapy")}>
-                                    Add Aromatherapy ($25)
+                              <DropdownMenuItem onClick={() => requestAddOn(booking.id, "Early check-in")}>
+                                Request early check-in
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => requestAddOn(booking.id, "Hot Stone")}>
-                                    Add Hot Stone Treatment ($35)
+                              <DropdownMenuItem onClick={() => requestAddOn(booking.id, "Special occasion setup")}>
+                                Special occasion setup
                                   </DropdownMenuItem>
-                                </>
-                              )}
-
-                              {booking.category === "dining" && (
-                                <>
-                                  <DropdownMenuItem onClick={() => requestAddOn(booking.id, "Wine Pairing")}>
-                                    Add Wine Pairing ($45)
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => requestAddOn(booking.id, "Dessert")}>
-                                    Add Special Dessert ($15)
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-
-                              {booking.category === "activities" && (
-                                <>
-                                  <DropdownMenuItem onClick={() => requestAddOn(booking.id, "Private Guide")}>
-                                    Add Private Guide ($50)
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => requestAddOn(booking.id, "Lunch")}>
-                                    Add Lunch Package ($30)
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-
-                              {booking.category === "transport" && (
-                                <>
-                                  <DropdownMenuItem onClick={() => requestAddOn(booking.id, "Premium Vehicle")}>
-                                    Upgrade to Premium Vehicle ($35)
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => requestAddOn(booking.id, "Extra Stop")}>
-                                    Add Extra Stop ($15)
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-
-                              <DropdownMenuItem onClick={() => requestAddOn(booking.id, "Special Request")}>
-                                Add Special Request
+                              <DropdownMenuItem onClick={() => requestAddOn(booking.id, "Dietary preferences")}>
+                                Specify dietary preferences
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
-                      )}
-
-                      {booking.status === "past" && (
-                        <div className="border-t p-3 bg-muted/20 flex justify-between items-center">
-                          <Button variant="ghost" size="sm">
-                            View Receipt
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            Book Again
-                          </Button>
                         </div>
-                      )}
-
-                      {booking.status === "cancelled" && (
-                        <div className="border-t p-3 bg-muted/20 flex justify-between items-center">
-                          <p className="text-xs text-muted-foreground">
-                            Cancelled on {new Date().toLocaleDateString()}
-                          </p>
-                          <Button variant="outline" size="sm">
-                            Book Again
-                          </Button>
-                        </div>
-                      )}
                     </CardContent>
                   </Card>
                 ))}

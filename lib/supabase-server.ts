@@ -4,8 +4,10 @@ import { cache } from "react"
 import type { Database } from "@/types/supabase"
 
 export const createServerSupabaseClient = cache(() => {
-  const cookieStore = cookies()
-  return createServerComponentClient<Database>({ cookies: () => cookieStore })
+  const cookieStore = cookies();
+  return createServerComponentClient<Database>({ 
+    cookies: () => cookieStore 
+  })
 })
 
 export async function getSession() {

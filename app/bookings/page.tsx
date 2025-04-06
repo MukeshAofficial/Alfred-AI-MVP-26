@@ -1,94 +1,83 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Calendar, Clock, MapPin, Utensils, SpadeIcon as Spa, Ticket } from "lucide-react"
+import { Calendar, Clock, MapPin, Utensils, SpadeIcon as Spa, Ticket, Loader2 } from "lucide-react"
 import Header from "@/components/header"
 import Navigation from "@/components/navigation"
 import { useMobile } from "@/hooks/use-mobile"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
+import { BookingsDB, BookingData } from "@/lib/bookings-db"
 
 // Add the missing import
 import { cn } from "@/lib/utils"
-
-// Mock booking data
-const bookings = [
-  {
-    id: "booking1",
-    type: "restaurant",
-    title: "The Grand Bistro",
-    date: "2023-05-15",
-    time: "19:30",
-    guests: 2,
-    status: "confirmed",
-    location: "Main Building, Floor 1",
-    image: "/placeholder.svg?height=100&width=100",
-  },
-  {
-    id: "booking2",
-    type: "spa",
-    title: "Deep Tissue Massage",
-    date: "2023-05-16",
-    time: "14:00",
-    duration: "60 min",
-    status: "confirmed",
-    location: "Spa & Wellness Center",
-    image: "/placeholder.svg?height=100&width=100",
-  },
-  {
-    id: "booking3",
-    type: "activity",
-    title: "Sunset Yacht Cruise",
-    date: "2023-05-17",
-    time: "17:30",
-    guests: 2,
-    status: "pending",
-    location: "Marina Dock B",
-    image: "/placeholder.svg?height=100&width=100",
-  },
-  {
-    id: "booking4",
-    type: "restaurant",
-    title: "Seaside Grill",
-    date: "2023-05-18",
-    time: "20:00",
-    guests: 4,
-    status: "confirmed",
-    location: "Beach Level, South Wing",
-    image: "/placeholder.svg?height=100&width=100",
-  },
-]
 
 export default function BookingsPage() {
   const [activeTab, setActiveTab] = useState("upcoming")
   const isMobile = useMobile()
   const router = useRouter()
+  const { profile } = useAuth()
+  const [bookings, setBookings] = useState<BookingData[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const upcomingBookings = bookings.filter((booking) => new Date(`${booking.date}T${booking.time}`) > new Date())
+  useEffect(() => {
+    if (profile?.id) {
+      fetchUserBookings(profile.id)
+    }
+  }, [profile?.id])
 
-  const pastBookings = bookings.filter((booking) => new Date(`${booking.date}T${booking.time}`) <= new Date())
+  const fetchUserBookings = async (userId: string) => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const bookingsDB = new BookingsDB()
+      const data = await bookingsDB.getUserBookings(userId)
+      setBookings(data)
+    } catch (err: any) {
+      console.error("Error fetching bookings:", err)
+      setError(err.message || "Failed to load bookings")
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
-  const getBookingIcon = (type) => {
-    switch (type) {
+  const upcomingBookings = bookings.filter(
+    (booking) => 
+      booking.status !== "completed" && 
+      booking.status !== "canceled" && 
+      new Date(booking.created_at) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+  )
+
+  const pastBookings = bookings.filter(
+    (booking) => 
+      booking.status === "completed" || 
+      (booking.status === "canceled") ||
+      new Date(booking.created_at) <= new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+  )
+
+  const getBookingIcon = (category: string) => {
+    switch (category) {
       case "restaurant":
         return <Utensils className="h-5 w-5 text-orange-500" />
       case "spa":
         return <Spa className="h-5 w-5 text-blue-500" />
-      case "activity":
+      case "tour":
         return <Ticket className="h-5 w-5 text-purple-500" />
       default:
         return <Calendar className="h-5 w-5 text-gray-500" />
     }
   }
 
-  const formatDate = (dateString) => {
-    const options = { weekday: "long", year: "numeric", month: "long", day: "numeric" }
+  const formatDate = (dateString: string) => {
+    const options: Intl.DateTimeFormatOptions = { weekday: "long", year: "numeric", month: "long", day: "numeric" }
     return new Date(dateString).toLocaleDateString("en-US", options)
   }
 
-  const handleNewBooking = (type) => {
+  const handleNewBooking = (type: string) => {
     switch (type) {
       case "restaurant":
         router.push("/restaurants")
@@ -96,12 +85,72 @@ export default function BookingsPage() {
       case "spa":
         router.push("/spa-services")
         break
-      case "activity":
+      case "tour":
         router.push("/explore")
         break
       default:
         router.push("/services")
     }
+  }
+
+  if (!profile) {
+    return (
+      <div className="flex flex-col min-h-screen">
+        <Header title="Bookings & Reservations" showNotification />
+        <div className="container mx-auto px-4 py-6 flex-1 flex items-center justify-center">
+          <Card>
+            <CardContent className="p-6">
+              <p className="text-center">Please log in to view your bookings.</p>
+              <Button 
+                className="w-full mt-4" 
+                onClick={() => router.push('/login')}
+              >
+                Log In
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+        <Navigation />
+      </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col min-h-screen">
+        <Header title="Bookings & Reservations" showNotification />
+        <div className="container mx-auto px-4 py-6 flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p>Loading your bookings...</p>
+          </div>
+        </div>
+        <Navigation />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col min-h-screen">
+        <Header title="Bookings & Reservations" showNotification />
+        <div className="container mx-auto px-4 py-6 flex-1 flex items-center justify-center">
+          <Card>
+            <CardContent className="p-6">
+              <p className="text-center text-red-500 mb-2">Error loading bookings</p>
+              <p className="text-center text-muted-foreground mb-4">{error}</p>
+              <Button 
+                className="w-full" 
+                onClick={() => profile?.id && fetchUserBookings(profile.id)}
+              >
+                Try Again
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+        <Navigation />
+      </div>
+    )
   }
 
   return (
@@ -127,8 +176,8 @@ export default function BookingsPage() {
                           <div className="flex">
                             <div className="w-24 h-24 bg-gray-100 flex-shrink-0">
                               <img
-                                src={booking.image || "/placeholder.svg"}
-                                alt={booking.title}
+                                src={booking.service?.image_url || "/placeholder.svg"}
+                                alt={booking.service?.name || "Service"}
                                 className="w-full h-full object-cover"
                               />
                             </div>
@@ -136,22 +185,22 @@ export default function BookingsPage() {
                               <div className="flex items-start justify-between">
                                 <div>
                                   <div className="flex items-center gap-2">
-                                    {getBookingIcon(booking.type)}
-                                    <h3 className="font-medium">{booking.title}</h3>
+                                    {getBookingIcon(booking.service?.category || "")}
+                                    <h3 className="font-medium">{booking.service?.name || "Service Booking"}</h3>
                                   </div>
                                   <div className="text-sm text-gray-500 mt-1">
                                     <div className="flex items-center gap-1">
                                       <Calendar className="h-3.5 w-3.5" />
-                                      <span>{formatDate(booking.date)}</span>
+                                      <span>{formatDate(booking.booking_date || booking.created_at)}</span>
                                     </div>
                                     <div className="flex items-center gap-1 mt-0.5">
                                       <Clock className="h-3.5 w-3.5" />
-                                      <span>{booking.time}</span>
-                                      {booking.duration && <span> • {booking.duration}</span>}
+                                      <span>{booking.metadata?.time || "Time not specified"}</span>
+                                      {booking.metadata?.duration && <span> • {booking.metadata.duration}</span>}
                                     </div>
                                     <div className="flex items-center gap-1 mt-0.5">
                                       <MapPin className="h-3.5 w-3.5" />
-                                      <span>{booking.location}</span>
+                                      <span>{booking.service?.location || "Location not specified"}</span>
                                     </div>
                                   </div>
                                 </div>
@@ -161,10 +210,12 @@ export default function BookingsPage() {
                                       "text-xs px-2 py-1 rounded-full",
                                       booking.status === "confirmed"
                                         ? "bg-green-100 text-green-800"
-                                        : "bg-yellow-100 text-yellow-800",
+                                        : booking.status === "pending"
+                                        ? "bg-yellow-100 text-yellow-800"
+                                        : "bg-gray-100 text-gray-800"
                                     )}
                                   >
-                                    {booking.status === "confirmed" ? "Confirmed" : "Pending"}
+                                    {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                                   </span>
                                 </div>
                               </div>
@@ -198,8 +249,8 @@ export default function BookingsPage() {
                           <div className="flex">
                             <div className="w-24 h-24 bg-gray-100 flex-shrink-0">
                               <img
-                                src={booking.image || "/placeholder.svg"}
-                                alt={booking.title}
+                                src={booking.service?.image_url || "/placeholder.svg"}
+                                alt={booking.service?.name || "Service"}
                                 className="w-full h-full object-cover"
                               />
                             </div>
@@ -207,28 +258,28 @@ export default function BookingsPage() {
                               <div className="flex items-start justify-between">
                                 <div>
                                   <div className="flex items-center gap-2">
-                                    {getBookingIcon(booking.type)}
-                                    <h3 className="font-medium">{booking.title}</h3>
+                                    {getBookingIcon(booking.service?.category || "")}
+                                    <h3 className="font-medium">{booking.service?.name || "Service Booking"}</h3>
                                   </div>
                                   <div className="text-sm text-gray-500 mt-1">
                                     <div className="flex items-center gap-1">
                                       <Calendar className="h-3.5 w-3.5" />
-                                      <span>{formatDate(booking.date)}</span>
+                                      <span>{formatDate(booking.booking_date || booking.created_at)}</span>
                                     </div>
                                     <div className="flex items-center gap-1 mt-0.5">
                                       <Clock className="h-3.5 w-3.5" />
-                                      <span>{booking.time}</span>
-                                      {booking.duration && <span> • {booking.duration}</span>}
+                                      <span>{booking.metadata?.time || "Time not specified"}</span>
+                                      {booking.metadata?.duration && <span> • {booking.metadata.duration}</span>}
                                     </div>
                                     <div className="flex items-center gap-1 mt-0.5">
                                       <MapPin className="h-3.5 w-3.5" />
-                                      <span>{booking.location}</span>
+                                      <span>{booking.service?.location || "Location not specified"}</span>
                                     </div>
                                   </div>
                                 </div>
                                 <div>
                                   <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-800">
-                                    Completed
+                                    {booking.status === "completed" ? "Completed" : "Canceled"}
                                   </span>
                                 </div>
                               </div>
@@ -249,49 +300,25 @@ export default function BookingsPage() {
             </Tabs>
           </div>
 
-          {/* Sidebar */}
-          <div className="w-full md:w-1/3 space-y-6">
+          {/* Quick Actions */}
+          <div className="w-full md:w-1/3">
             <Card>
               <CardContent className="p-6">
-                <h3 className="text-lg font-medium mb-4">Quick Bookings</h3>
+                <h3 className="text-lg font-medium mb-4">Quick Actions</h3>
                 <div className="space-y-3">
                   <Button className="w-full justify-start" onClick={() => handleNewBooking("restaurant")}>
                     <Utensils className="mr-2 h-4 w-4" />
                     Book a Restaurant
                   </Button>
-                  <Button variant="outline" className="w-full justify-start" onClick={() => handleNewBooking("spa")}>
+                  <Button className="w-full justify-start" variant="outline" onClick={() => handleNewBooking("spa")}>
                     <Spa className="mr-2 h-4 w-4" />
-                    Book a Spa Treatment
+                    Book a Spa Service
                   </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start"
-                    onClick={() => handleNewBooking("activity")}
-                  >
+                  <Button className="w-full justify-start" variant="outline" onClick={() => handleNewBooking("tour")}>
                     <Ticket className="mr-2 h-4 w-4" />
                     Book an Activity
                   </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start"
-                    onClick={() => router.push("/room-dining")}
-                  >
-                    <Utensils className="mr-2 h-4 w-4" />
-                    Order Room Dining
-                  </Button>
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-6">
-                <h3 className="text-lg font-medium mb-4">Need Assistance?</h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Our concierge team is available 24/7 to help with your bookings and reservations.
-                </p>
-                <Button variant="outline" className="w-full" onClick={() => router.push("/concierge")}>
-                  Chat with Concierge
-                </Button>
               </CardContent>
             </Card>
           </div>

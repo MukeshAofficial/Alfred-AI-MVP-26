@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -8,55 +9,140 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { User, Settings, CreditCard, LogOut, Calendar } from "lucide-react"
+import { User, Settings, CreditCard, LogOut, Calendar, Loader2 } from "lucide-react"
 import Header from "@/components/header"
 import Navigation from "@/components/navigation"
 import { useMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
+import UserBookings from "@/components/user-bookings"
+import { useAuth } from "@/contexts/auth-context"
+import { useRouter } from "next/navigation"
+import { createBookingFromSession } from "@/lib/actions"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function ProfilePage() {
+  const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState("profile")
   const isMobile = useMobile()
+  const { profile, logout } = useAuth()
+  const router = useRouter()
+  const { toast } = useToast()
+  const [isProcessingBooking, setIsProcessingBooking] = useState(false)
 
-  // Mock user data
-  const userData = {
-    name: "John Smith",
-    email: "john.smith@example.com",
-    phone: "+1 (555) 123-4567",
-    roomNumber: "Suite 402",
-    checkIn: "May 12, 2023",
-    checkOut: "May 19, 2023",
-    loyaltyPoints: 2450,
-    loyaltyTier: "Gold",
-    profileImage: "/placeholder.svg?height=100&width=100",
-    preferences: {
-      roomTemperature: "72°F",
-      pillowType: "Memory Foam",
-      dietaryRestrictions: "None",
-      wakeUpCalls: "No",
-      newspaperDelivery: "Yes - The New York Times",
-    },
-    paymentMethods: [
-      {
-        id: "card1",
-        type: "Visa",
-        last4: "4242",
-        expiry: "05/25",
-        isDefault: true,
-      },
-      {
-        id: "card2",
-        type: "Mastercard",
-        last4: "8888",
-        expiry: "09/24",
-        isDefault: false,
-      },
-    ],
+  // Check for tab parameter in URL
+  useEffect(() => {
+    const tabParam = searchParams?.get('tab')
+    if (tabParam && ['profile', 'preferences', 'payment', 'bookings'].includes(tabParam)) {
+      setActiveTab(tabParam)
+    }
+    
+    // Also check for success parameter to show toast for successful booking
+    const success = searchParams?.get('success')
+    const sessionId = searchParams?.get('session_id')
+    const bookingDate = searchParams?.get('booking_date')
+    
+    if (success === 'true' && sessionId && sessionId !== '{CHECKOUT_SESSION_ID}' && profile?.id) {
+      setActiveTab('bookings')
+      
+      // Check if we need to create a booking via fallback method
+      const processFallbackBooking = async () => {
+        try {
+          setIsProcessingBooking(true)
+          
+          // Get the service ID from the success URL
+          const serviceId = sessionId.split('_').length > 2 ? sessionId.split('_')[2] : null
+          
+          if (!serviceId || !bookingDate) {
+            console.error('Missing service ID or booking date for fallback booking creation');
+            return;
+          }
+          
+          console.log(`Attempting fallback booking creation for session ${sessionId}`);
+          
+          const response = await createBookingFromSession({
+            sessionId,
+            serviceId,
+            userId: profile.id,
+            bookingDate: bookingDate || new Date().toISOString().split('T')[0]
+          });
+          
+          if (response.success) {
+            if (response.alreadyExists) {
+              toast({
+                title: "Booking Confirmed",
+                description: "Your booking has already been processed successfully.",
+              });
+            } else {
+              toast({
+                title: "Booking Created",
+                description: "Your booking was successfully created and is now visible in your bookings tab.",
+              });
+            }
+            
+            // Remove query parameters after successful booking
+            const url = new URL(window.location.href);
+            url.searchParams.delete('success');
+            url.searchParams.delete('session_id');
+            url.searchParams.delete('booking_date');
+            url.searchParams.set('tab', 'bookings');
+            window.history.replaceState({}, '', url.toString());
+          }
+        } catch (error: any) {
+          console.error('Error creating fallback booking:', error);
+          toast({
+            title: "Booking Error",
+            description: "There was an issue creating your booking. Please contact support.",
+            variant: "destructive",
+          });
+        } finally {
+          setIsProcessingBooking(false);
+        }
+      };
+      
+      // Run the fallback booking creation
+      processFallbackBooking();
+    }
+  }, [searchParams, profile, toast]);
+
+  const handleLogout = async () => {
+    await logout()
+    router.push('/')
+  }
+
+  if (!profile) {
+    return (
+      <div className="flex flex-col min-h-screen">
+        <Header title="My Profile" showNotification />
+        <div className="container mx-auto px-4 py-6 flex-1 flex items-center justify-center">
+          <Card>
+            <CardContent className="p-6">
+              <p className="text-center">Please log in to view your profile.</p>
+              <Button 
+                className="w-full mt-4" 
+                onClick={() => router.push('/login')}
+              >
+                Log In
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+        <Navigation />
+      </div>
+    )
   }
 
   return (
     <div className="flex flex-col min-h-screen">
       <Header title="My Profile" showNotification />
+
+      {isProcessingBooking && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg flex flex-col items-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+            <p className="text-center">Processing your booking...</p>
+          </div>
+        </div>
+      )}
 
       <div className={cn("container mx-auto px-4 py-6 flex-1", isMobile ? "pb-20" : "")}>
         <div className="flex flex-col md:flex-row gap-6">
@@ -66,32 +152,28 @@ export default function ProfilePage() {
               <CardContent className="p-6">
                 <div className="flex flex-col items-center text-center">
                   <Avatar className="h-24 w-24 mb-4">
-                    <AvatarImage src={userData.profileImage} alt={userData.name} />
-                    <AvatarFallback>{userData.name.charAt(0)}</AvatarFallback>
+                    <AvatarImage src={profile.avatar_url || "/placeholder.svg?height=100&width=100"} alt={profile.full_name || 'User'} />
+                    <AvatarFallback>{profile.full_name ? profile.full_name.charAt(0) : 'U'}</AvatarFallback>
                   </Avatar>
-                  <h2 className="text-xl font-bold">{userData.name}</h2>
-                  <p className="text-gray-500 mb-2">{userData.email}</p>
-                  <Badge className="mb-4">{userData.loyaltyTier} Member</Badge>
+                  <h2 className="text-xl font-bold">{profile.full_name || 'User'}</h2>
+                  <p className="text-gray-500 mb-2">{profile.email || ''}</p>
+                  {profile.membership_tier && (
+                    <Badge className="mb-4">{profile.membership_tier} Member</Badge>
+                  )}
 
+                  {profile.loyalty_points !== undefined && (
+                    <>
                   <div className="w-full bg-gray-100 rounded-full h-2.5 mb-1">
-                    <div className="bg-primary h-2.5 rounded-full" style={{ width: "65%" }}></div>
+                        <div 
+                          className="bg-primary h-2.5 rounded-full" 
+                          style={{ width: `${Math.min((profile.loyalty_points / 3000) * 100, 100)}%` }}
+                        ></div>
                   </div>
-                  <p className="text-sm text-gray-500 mb-6">{userData.loyaltyPoints} points • 550 points to Platinum</p>
-
-                  <div className="w-full space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Room:</span>
-                      <span className="font-medium">{userData.roomNumber}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Check-in:</span>
-                      <span className="font-medium">{userData.checkIn}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Check-out:</span>
-                      <span className="font-medium">{userData.checkOut}</span>
-                    </div>
-                  </div>
+                      <p className="text-sm text-gray-500 mb-6">
+                        {profile.loyalty_points} points • {Math.max(0, 3000 - profile.loyalty_points)} points to next tier
+                      </p>
+                    </>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -145,7 +227,11 @@ export default function ProfilePage() {
                       <Calendar className="mr-2 h-4 w-4" />
                       My Bookings
                     </Button>
-                    <Button variant="ghost" className="w-full justify-start rounded-none h-12 text-red-500">
+                    <Button 
+                      variant="ghost" 
+                      className="w-full justify-start rounded-none h-12 text-red-500"
+                      onClick={handleLogout}
+                    >
                       <LogOut className="mr-2 h-4 w-4" />
                       Sign Out
                     </Button>
@@ -158,7 +244,7 @@ export default function ProfilePage() {
           {/* Main Content */}
           <div className="w-full md:w-2/3">
             {isMobile ? (
-              <Tabs defaultValue="profile">
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="w-full mb-6">
                   <TabsTrigger value="profile" className="flex-1">
                     Profile
@@ -168,6 +254,9 @@ export default function ProfilePage() {
                   </TabsTrigger>
                   <TabsTrigger value="payment" className="flex-1">
                     Payment
+                  </TabsTrigger>
+                  <TabsTrigger value="bookings" className="flex-1">
+                    Bookings
                   </TabsTrigger>
                 </TabsList>
 
@@ -180,15 +269,15 @@ export default function ProfilePage() {
                     <CardContent className="space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="name">Full Name</Label>
-                        <Input id="name" defaultValue={userData.name} />
+                        <Input id="name" defaultValue={profile.full_name || ''} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="email">Email</Label>
-                        <Input id="email" type="email" defaultValue={userData.email} />
+                        <Input id="email" type="email" defaultValue={profile.email || ''} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="phone">Phone</Label>
-                        <Input id="phone" type="tel" defaultValue={userData.phone} />
+                        <Input id="phone" type="tel" defaultValue={profile.phone || ''} />
                       </div>
                     </CardContent>
                     <CardFooter>
@@ -206,7 +295,7 @@ export default function ProfilePage() {
                     <CardContent className="space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="temperature">Room Temperature</Label>
-                        <Input id="temperature" defaultValue={userData.preferences.roomTemperature} />
+                        <Input id="temperature" defaultValue={profile.preferences?.roomTemperature || ''} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="pillow">Pillow Type</Label>
@@ -219,14 +308,14 @@ export default function ProfilePage() {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="dietary">Dietary Restrictions</Label>
-                        <Input id="dietary" defaultValue={userData.preferences.dietaryRestrictions} />
+                        <Input id="dietary" defaultValue={profile.preferences?.dietaryRestrictions || 'None'} />
                       </div>
                       <div className="flex items-center justify-between">
                         <Label htmlFor="wakeup">Wake-up Calls</Label>
                         <input
                           type="checkbox"
                           id="wakeup"
-                          defaultChecked={userData.preferences.wakeUpCalls === "Yes"}
+                          defaultChecked={profile.preferences?.wakeUpCalls === "Yes"}
                         />
                       </div>
                       <div className="flex items-center justify-between">
@@ -234,7 +323,7 @@ export default function ProfilePage() {
                         <input
                           type="checkbox"
                           id="newspaper"
-                          defaultChecked={userData.preferences.newspaperDelivery.startsWith("Yes")}
+                          defaultChecked={profile.preferences?.newspaperDelivery?.startsWith("Yes")}
                         />
                       </div>
                     </CardContent>
@@ -251,8 +340,9 @@ export default function ProfilePage() {
                       <CardDescription>Manage your payment options</CardDescription>
                     </CardHeader>
                     <CardContent>
+                      {profile.paymentMethods && profile.paymentMethods.length > 0 ? (
                       <div className="space-y-4">
-                        {userData.paymentMethods.map((card) => (
+                          {profile.paymentMethods.map((card) => (
                           <div key={card.id} className="flex items-center justify-between p-3 border rounded">
                             <div className="flex items-center">
                               <div className="w-10 h-6 bg-gray-200 rounded mr-3"></div>
@@ -276,10 +366,25 @@ export default function ProfilePage() {
                           </div>
                         ))}
                       </div>
+                      ) : (
+                        <p className="text-center py-4 text-muted-foreground">No payment methods added yet.</p>
+                      )}
                     </CardContent>
                     <CardFooter>
                       <Button>Add Payment Method</Button>
                     </CardFooter>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="bookings">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>My Bookings</CardTitle>
+                      <CardDescription>View and manage your reservations</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <UserBookings compactMode={true} />
+                    </CardContent>
                   </Card>
                 </TabsContent>
               </Tabs>
@@ -294,15 +399,15 @@ export default function ProfilePage() {
                     <CardContent className="space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="name">Full Name</Label>
-                        <Input id="name" defaultValue={userData.name} />
+                        <Input id="name" defaultValue={profile.full_name || ''} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="email">Email</Label>
-                        <Input id="email" type="email" defaultValue={userData.email} />
+                        <Input id="email" type="email" defaultValue={profile.email || ''} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="phone">Phone</Label>
-                        <Input id="phone" type="tel" defaultValue={userData.phone} />
+                        <Input id="phone" type="tel" defaultValue={profile.phone || ''} />
                       </div>
                     </CardContent>
                     <CardFooter>
@@ -320,7 +425,7 @@ export default function ProfilePage() {
                     <CardContent className="space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="temperature">Room Temperature</Label>
-                        <Input id="temperature" defaultValue={userData.preferences.roomTemperature} />
+                        <Input id="temperature" defaultValue={profile.preferences?.roomTemperature || ''} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="pillow">Pillow Type</Label>
@@ -333,14 +438,14 @@ export default function ProfilePage() {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="dietary">Dietary Restrictions</Label>
-                        <Input id="dietary" defaultValue={userData.preferences.dietaryRestrictions} />
+                        <Input id="dietary" defaultValue={profile.preferences?.dietaryRestrictions || 'None'} />
                       </div>
                       <div className="flex items-center justify-between">
                         <Label htmlFor="wakeup">Wake-up Calls</Label>
                         <input
                           type="checkbox"
                           id="wakeup"
-                          defaultChecked={userData.preferences.wakeUpCalls === "Yes"}
+                          defaultChecked={profile.preferences?.wakeUpCalls === "Yes"}
                         />
                       </div>
                       <div className="flex items-center justify-between">
@@ -348,7 +453,7 @@ export default function ProfilePage() {
                         <input
                           type="checkbox"
                           id="newspaper"
-                          defaultChecked={userData.preferences.newspaperDelivery.startsWith("Yes")}
+                          defaultChecked={profile.preferences?.newspaperDelivery?.startsWith("Yes")}
                         />
                       </div>
                     </CardContent>
@@ -365,8 +470,9 @@ export default function ProfilePage() {
                       <CardDescription>Manage your payment options</CardDescription>
                     </CardHeader>
                     <CardContent>
+                      {profile.paymentMethods && profile.paymentMethods.length > 0 ? (
                       <div className="space-y-4">
-                        {userData.paymentMethods.map((card) => (
+                          {profile.paymentMethods.map((card) => (
                           <div key={card.id} className="flex items-center justify-between p-3 border rounded">
                             <div className="flex items-center">
                               <div className="w-10 h-6 bg-gray-200 rounded mr-3"></div>
@@ -390,6 +496,9 @@ export default function ProfilePage() {
                           </div>
                         ))}
                       </div>
+                      ) : (
+                        <p className="text-center py-4 text-muted-foreground">No payment methods added yet.</p>
+                      )}
                     </CardContent>
                     <CardFooter>
                       <Button>Add Payment Method</Button>
@@ -403,50 +512,9 @@ export default function ProfilePage() {
                       <CardTitle>My Bookings</CardTitle>
                       <CardDescription>View and manage your reservations</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="p-4 border rounded">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h3 className="font-medium">The Grand Bistro</h3>
-                              <p className="text-sm text-gray-500">Dinner Reservation</p>
-                              <div className="flex items-center text-sm mt-1">
-                                <Calendar className="h-3.5 w-3.5 mr-1" />
-                                <span>May 15, 2023 • 7:30 PM</span>
-                              </div>
-                            </div>
-                            <Badge>Confirmed</Badge>
-                          </div>
-                          <div className="flex justify-end mt-4">
-                            <Button variant="outline" size="sm">
-                              View Details
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="p-4 border rounded">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h3 className="font-medium">Deep Tissue Massage</h3>
-                              <p className="text-sm text-gray-500">Spa Treatment</p>
-                              <div className="flex items-center text-sm mt-1">
-                                <Calendar className="h-3.5 w-3.5 mr-1" />
-                                <span>May 16, 2023 • 2:00 PM</span>
-                              </div>
-                            </div>
-                            <Badge>Confirmed</Badge>
-                          </div>
-                          <div className="flex justify-end mt-4">
-                            <Button variant="outline" size="sm">
-                              View Details
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
+                    <CardContent className="p-0">
+                      <UserBookings compactMode={true} />
                     </CardContent>
-                    <CardFooter>
-                      <Button variant="outline">View All Bookings</Button>
-                    </CardFooter>
                   </Card>
                 )}
               </div>
