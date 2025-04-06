@@ -58,28 +58,8 @@ export default function ServiceDetailPage({ params }: ServicePageProps) {
       return
     }
 
-    setIsBooking(true)
-    try {
-      // In a real app, we would make an API call to book the service
-      // For now, we'll just simulate a booking process
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      
-      toast({
-        title: "Booking successful",
-        description: `You've successfully booked ${service?.name}. Check your bookings for details.`,
-      })
-      
-      // Redirect to bookings page
-      router.push("/bookings")
-    } catch (err) {
-      toast({
-        title: "Booking failed",
-        description: "There was an error processing your booking. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsBooking(false)
-    }
+    // Navigate to checkout page with serviceId
+    router.push(`/checkout?serviceId=${serviceId}`)
   }
 
   const getCategoryLabel = (category: ServiceCategory | undefined) => {

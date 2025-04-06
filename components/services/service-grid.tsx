@@ -266,7 +266,7 @@ export default function ServiceGrid() {
                     <div className="font-semibold">
                       {service.currency} {service.price.toFixed(2)}
                     </div>
-                    <Link href={`/services/${service.id}`}>
+                    <Link href={`/checkout?serviceId=${service.id}`}>
                       <Button size="sm">
                         <Calendar className="h-4 w-4 mr-2" />
                         Book Now
