@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import ServiceForm from "@/components/vendor/service-form"
+import { use } from "react"
 
 interface EditServicePageProps {
   params: {
@@ -12,9 +13,12 @@ interface EditServicePageProps {
 }
 
 export default function EditServicePage({ params }: EditServicePageProps) {
+  // Properly unwrap params using React.use
+  const unwrappedParams = use(params);
+  const serviceId = unwrappedParams.id;
+  
   const { profile } = useAuth()
   const router = useRouter()
-  const serviceId = params.id
 
   useEffect(() => {
     if (!profile) {

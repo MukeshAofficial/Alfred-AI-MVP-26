@@ -71,6 +71,15 @@ export async function middleware(req: NextRequest) {
       req.nextUrl.pathname === "/admin/pre-register" ||
       req.nextUrl.pathname === "/vendor/pre-register"
     ) {
+      // Check if there's a redirectedFrom parameter in the URL
+      const redirectedFrom = req.nextUrl.searchParams.get('redirectedFrom');
+      
+      // If the user is a vendor and was trying to access vendor/services, send them there
+      if (profile.role === "vendor" && redirectedFrom && redirectedFrom.startsWith('/vendor/services')) {
+        console.log("Vendor returning to vendor services page:", redirectedFrom);
+        return NextResponse.redirect(new URL(redirectedFrom, req.url));
+      }
+      
       console.log("User already logged in, redirecting based on role:", profile.role);
       
       let redirectPath;
@@ -102,11 +111,11 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(new URL("/admin/dashboard", req.url))
     }
     
-    // If vendor tries to access guest routes
-    if (profile.role === "vendor" && (
-      req.nextUrl.pathname === "/explore" || 
-      req.nextUrl.pathname === "/"
-    )) {
+    // If vendor tries to access guest routes - but allow access to vendor services pages
+    if (profile.role === "vendor" && 
+        (req.nextUrl.pathname === "/explore" || req.nextUrl.pathname === "/") &&
+        !req.nextUrl.pathname.startsWith("/vendor/services")
+    ) {
       console.log("Vendor user trying to access guest route, redirecting to vendor dashboard");
       return NextResponse.redirect(new URL("/vendor/dashboard", req.url))
     }

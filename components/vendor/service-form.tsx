@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2 } from "lucide-react"
+import { Loader2, CheckCircle2, Plus, ArrowLeft } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ServicesDB, ServiceData, ServiceCategory } from "@/lib/services-db"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 interface ServiceFormProps {
   serviceId?: string
@@ -22,11 +23,14 @@ export default function ServiceForm({ serviceId, onSuccess }: ServiceFormProps) 
   const { profile } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
-  const servicesDB = new ServicesDB()
+  const [servicesDB] = useState(() => new ServicesDB())
+  const [isClient, setIsClient] = useState(false)
 
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingService, setIsLoadingService] = useState(!!serviceId)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
+  const [createdServiceId, setCreatedServiceId] = useState<string | null>(null)
   const [serviceData, setServiceData] = useState<Partial<ServiceData>>({
     name: "",
     description: "",
@@ -38,9 +42,14 @@ export default function ServiceForm({ serviceId, onSuccess }: ServiceFormProps) 
     location: "",
   })
 
+  // Set isClient to true when component mounts (client-side only)
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
   // If serviceId is provided, fetch the service data
   useEffect(() => {
-    if (serviceId) {
+    if (isClient && serviceId) {
       const fetchService = async () => {
         try {
           const service = await servicesDB.getServiceById(serviceId)
@@ -58,7 +67,7 @@ export default function ServiceForm({ serviceId, onSuccess }: ServiceFormProps) 
       }
       fetchService()
     }
-  }, [serviceId, toast])
+  }, [serviceId, toast, isClient, servicesDB])
 
   // Handle form input changes
   const handleChange = (field: keyof ServiceData, value: any) => {
@@ -76,11 +85,33 @@ export default function ServiceForm({ serviceId, onSuccess }: ServiceFormProps) 
     }
   }
 
+  // Reset form to add a new service
+  const handleAddAnother = () => {
+    setSuccess(false)
+    setCreatedServiceId(null)
+    setServiceData({
+      name: "",
+      description: "",
+      price: 0,
+      currency: "USD",
+      category: "other" as ServiceCategory,
+      duration: 60,
+      images: [],
+      location: "",
+    })
+  }
+
+  // View all services
+  const handleViewAll = () => {
+    router.push("/vendor/services")
+  }
+
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError(null)
+    setSuccess(false)
 
     if (!profile?.id) {
       setError("You must be logged in to create a service")
@@ -104,6 +135,8 @@ export default function ServiceForm({ serviceId, onSuccess }: ServiceFormProps) 
           title: "Service updated",
           description: "Your service has been updated successfully.",
         })
+        setSuccess(true)
+        setCreatedServiceId(result.id || null)
       } else {
         // Create new service
         result = await servicesDB.createService(data)
@@ -111,13 +144,14 @@ export default function ServiceForm({ serviceId, onSuccess }: ServiceFormProps) 
           title: "Service created",
           description: "Your service has been created successfully.",
         })
+        setSuccess(true)
+        setCreatedServiceId(result.id || null)
       }
 
       if (onSuccess) {
         onSuccess()
-      } else {
-        router.push("/vendor/services")
       }
+      // We'll stay on the page instead of redirecting
     } catch (err: any) {
       console.error("Error saving service:", err)
       setError(err.message || "An unexpected error occurred")
@@ -131,11 +165,59 @@ export default function ServiceForm({ serviceId, onSuccess }: ServiceFormProps) 
     }
   }
 
+  // Don't render anything during SSR to avoid hydration mismatches
+  if (!isClient) {
+    return null;
+  }
+
   if (isLoadingService) {
     return (
       <div className="flex justify-center items-center p-8">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
+    )
+  }
+
+  // Show success state if service was successfully created/updated
+  if (success) {
+    return (
+      <Card className="border-green-200">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-green-600 flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5" />
+            Service {serviceId ? "Updated" : "Created"} Successfully
+          </CardTitle>
+          <CardDescription>
+            Your service has been {serviceId ? "updated" : "saved"} to the database.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <Alert className="bg-green-50 border-green-200 mb-6">
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <AlertTitle className="text-green-800">Success!</AlertTitle>
+            <AlertDescription className="text-green-700">
+              Your service "{serviceData.name}" has been {serviceId ? "updated" : "added"} successfully.
+            </AlertDescription>
+          </Alert>
+
+          <div className="flex flex-col sm:flex-row gap-4 mt-6">
+            {!serviceId && (
+              <Button onClick={handleAddAnother} className="flex-1 gap-2">
+                <Plus className="h-4 w-4" />
+                Add Another Service
+              </Button>
+            )}
+            <Button 
+              onClick={handleViewAll} 
+              variant="outline" 
+              className="flex-1 gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              View All Services
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     )
   }
 

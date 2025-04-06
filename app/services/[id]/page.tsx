@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ServicesDB, ServiceData, ServiceCategory } from "@/lib/services-db"
 import { useToast } from "@/components/ui/use-toast"
+import { use } from "react"
 
 interface ServicePageProps {
   params: {
@@ -18,11 +19,14 @@ interface ServicePageProps {
 }
 
 export default function ServiceDetailPage({ params }: ServicePageProps) {
+  // Properly unwrap params using React.use
+  const unwrappedParams = use(params);
+  const serviceId = unwrappedParams.id;
+
   const { profile } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
   const servicesDB = new ServicesDB()
-  const serviceId = params.id
 
   const [service, setService] = useState<ServiceData | null>(null)
   const [isLoading, setIsLoading] = useState(true)

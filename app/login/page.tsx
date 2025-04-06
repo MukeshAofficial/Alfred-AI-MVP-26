@@ -31,6 +31,16 @@ export default function LoginPage() {
   useEffect(() => {
     if (!authLoading && profile) {
       console.log("User already authenticated with role:", profile.role)
+      
+      // If there's a redirectedFrom parameter in the URL and it's a vendor services page 
+      // and the user is a vendor, we should redirect them there
+      if (redirectTo && redirectTo.startsWith('/vendor/services') && profile.role === 'vendor') {
+        console.log("Redirecting vendor to requested services page:", redirectTo);
+        router.push(redirectTo);
+        return;
+      }
+      
+      // Otherwise, redirect based on role
       switch (profile.role) {
         case "guest":
           router.push("/explore")
@@ -45,7 +55,7 @@ export default function LoginPage() {
           router.push("/")
       }
     }
-  }, [profile, authLoading, router])
+  }, [profile, authLoading, router, redirectTo])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -70,7 +80,17 @@ export default function LoginPage() {
           title: "Login successful",
           description: "You have been logged in successfully.",
         })
-        // Redirect will be handled by the auth context and middleware
+        
+        // If there's a redirectedFrom parameter and it's a vendor services path,
+        // we should manually redirect vendors there instead of relying on the auth context
+        if (redirectTo && redirectTo.startsWith('/vendor/services')) {
+          // We need to wait for the profile to be loaded before redirecting
+          setTimeout(() => {
+            console.log("Manual redirect to vendor services page:", redirectTo);
+            router.push(redirectTo);
+          }, 300);
+        }
+        // Otherwise, redirect will be handled by the auth context and middleware
       }
     } catch (err) {
       setError("An unexpected error occurred")

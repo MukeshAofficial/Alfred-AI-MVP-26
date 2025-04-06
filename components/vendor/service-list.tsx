@@ -24,25 +24,33 @@ export default function VendorServiceList() {
   const { profile } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
-  const servicesDB = new ServicesDB()
+  const [servicesDB] = useState(() => new ServicesDB())
 
   const [services, setServices] = useState<ServiceData[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [serviceToDelete, setServiceToDelete] = useState<string | null>(null)
+  const [isClient, setIsClient] = useState(false)
+
+  // Ensure we're only rendering client-side to avoid hydration mismatches
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
 
   useEffect(() => {
-    if (profile?.id) {
+    if (isClient && profile?.id) {
       fetchServices()
     }
-  }, [profile])
+  }, [profile, isClient])
 
   const fetchServices = async () => {
+    if (!profile?.id) return;
+    
     setIsLoading(true)
     setError(null)
     try {
-      const data = await servicesDB.getVendorServices(profile!.id)
+      const data = await servicesDB.getVendorServices(profile.id)
       setServices(data)
     } catch (err: any) {
       console.error("Error fetching services:", err)
@@ -89,6 +97,10 @@ export default function VendorServiceList() {
     }
   }
 
+  if (!isClient) {
+    return null; // Don't render anything during SSR to avoid hydration mismatch
+  }
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center p-8">
@@ -112,9 +124,17 @@ export default function VendorServiceList() {
       {error && (
         <div className="rounded-md bg-destructive/15 p-4 text-sm text-destructive flex gap-2 items-start">
           <AlertCircle className="h-5 w-5 mt-0.5" />
-          <div>
+          <div className="flex-1">
             <p className="font-medium">Error loading services</p>
             <p>{error}</p>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="mt-2"
+              onClick={fetchServices}
+            >
+              Retry
+            </Button>
           </div>
         </div>
       )}
