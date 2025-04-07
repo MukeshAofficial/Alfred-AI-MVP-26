@@ -364,13 +364,13 @@ class ChatRequest(BaseModel):
 @app.post("/chat")
 async def chat(req: ChatRequest):
     try:
-    response = await agent.ainvoke({
-        "messages": [
-            system_prompt,
-            {"role": "user", "content": req.message}
-        ]
-    })
-    last_message = response['messages'][-1]
+        response = await agent.ainvoke({
+            "messages": [
+                system_prompt,
+                {"role": "user", "content": req.message}
+            ]
+        })
+        last_message = response['messages'][-1]
         return {"response": last_message.content}
     except Exception as e:
         print(f"Chat error: {e}")
