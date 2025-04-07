@@ -20,7 +20,6 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/auth-context";
 import { Suspense } from "react";
 
-// Separate component for the dynamic content that uses useSearchParams
 function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -36,19 +35,20 @@ function CheckoutContent() {
     new Date().toISOString().split("T")[0]
   );
 
-  // Check for cancel status from returned Stripe session
   const canceled = searchParams.get("canceled");
 
+  // Handle cancellation feedback
   useEffect(() => {
     if (canceled) {
       toast({
-        title: "Payment canceled",
-        description: "Your payment was canceled. You can try again when you're ready.",
+        title: "Payment Canceled",
+        description: "Your payment was canceled. Please try again when ready.",
         variant: "destructive",
       });
     }
   }, [canceled, toast]);
 
+  // Fetch service details
   useEffect(() => {
     const fetchServiceDetails = async () => {
       if (!serviceId) {
@@ -57,14 +57,22 @@ function CheckoutContent() {
         return;
       }
 
+      setLoading(true);
       try {
         const servicesDB = new ServicesDB();
         const serviceData = await servicesDB.getServiceById(serviceId);
+        if (!serviceData) {
+          throw new Error("Service not found.");
+        }
         setService(serviceData);
         setError(null);
-      } catch (err: any) {
+      } catch (err) {
         console.error("Error fetching service:", err);
-        setError(err.message || "Could not load service details. Please try again.");
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Could not load service details. Please try again."
+        );
       } finally {
         setLoading(false);
       }
@@ -73,67 +81,69 @@ function CheckoutContent() {
     fetchServiceDetails();
   }, [serviceId]);
 
+  // Handle checkout process
   const handleCheckout = async () => {
-    if (!serviceId) {
+    if (!serviceId || !service) {
       toast({
         title: "Error",
-        description: "No service selected for checkout",
+        description: "No service selected for checkout.",
         variant: "destructive",
       });
       return;
     }
 
     setIsProcessing(true);
-
     try {
       const bookingDateParam = bookingDate || new Date().toISOString().split("T")[0];
-      console.log(`Using booking date: ${bookingDateParam}, user: ${user?.id || "guest"}`);
-
-      if (!serviceId) {
-        throw new Error("Service ID is required for checkout");
-      }
-
       const { sessionUrl, sessionId } = await createCheckoutSession({
         serviceId,
         bookingDate: bookingDateParam,
         userId: user?.id || "guest",
       });
 
-      if (sessionUrl) {
-        console.log("Checkout session created, redirecting to:", sessionUrl);
-
-        if (sessionId) {
-          localStorage.setItem(
-            "lastCheckoutSession",
-            JSON.stringify({
-              sessionId,
-              serviceId,
-              userId: user?.id || "guest",
-              bookingDate: bookingDateParam,
-              timestamp: Date.now(),
-            })
-          );
-        }
-
-        window.location.href = sessionUrl;
-      } else {
-        throw new Error("Failed to create checkout session");
+      if (!sessionUrl) {
+        throw new Error("Failed to create checkout session.");
       }
-    } catch (err: any) {
+
+      console.log("Checkout session created, redirecting to:", sessionUrl);
+
+      if (sessionId) {
+        localStorage.setItem(
+          "lastCheckoutSession",
+          JSON.stringify({
+            sessionId,
+            serviceId,
+            userId: user?.id || "guest",
+            bookingDate: bookingDateParam,
+            timestamp: Date.now(),
+          })
+        );
+      }
+
+      window.location.href = sessionUrl;
+    } catch (err) {
       console.error("Checkout error:", err);
       toast({
         title: "Checkout Error",
         description:
-          err.message || "Something went wrong with the checkout process. Please try again.",
+          err instanceof Error
+            ? err.message
+            : "Something went wrong with the checkout process. Please try again.",
         variant: "destructive",
       });
+    } finally {
       setIsProcessing(false);
     }
   };
 
   return (
     <main className="flex-1 container max-w-4xl mx-auto px-4 py-6 pb-20">
-      <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-4">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => router.back()}
+        className="mb-4"
+      >
         <ArrowLeft className="h-4 w-4 mr-1" />
         Back
       </Button>
@@ -152,7 +162,10 @@ function CheckoutContent() {
             ) : error ? (
               <div className="text-center py-6">
                 <p className="text-red-500 mb-4">{error}</p>
-                <Button onClick={() => router.push("/services")} variant="outline">
+                <Button
+                  onClick={() => router.push("/services")}
+                  variant="outline"
+                >
                   Browse Services
                 </Button>
               </div>
@@ -184,20 +197,26 @@ function CheckoutContent() {
 
                     <div className="space-y-2">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Service Price</span>
+                        <span className="text-muted-foreground">
+                          Service Price
+                        </span>
                         <span className="font-medium">
                           {service.currency} {service.price.toFixed(2)}
                         </span>
                       </div>
                       {service.duration && (
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Duration</span>
+                          <span className="text-muted-foreground">
+                            Duration
+                          </span>
                           <span>{service.duration} minutes</span>
                         </div>
                       )}
                       {service.location && (
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Location</span>
+                          <span className="text-muted-foreground">
+                            Location
+                          </span>
                           <span>{service.location}</span>
                         </div>
                       )}
@@ -216,7 +235,7 @@ function CheckoutContent() {
                     <Button
                       className="w-full"
                       onClick={handleCheckout}
-                      disabled={isProcessing}
+                      disabled={isProcessing || !bookingDate}
                     >
                       {isProcessing ? (
                         <>
@@ -238,8 +257,13 @@ function CheckoutContent() {
               </div>
             ) : (
               <div className="text-center py-6">
-                <p className="text-muted-foreground mb-4">No service selected.</p>
-                <Button onClick={() => router.push("/services")} variant="outline">
+                <p className="text-muted-foreground mb-4">
+                  No service selected.
+                </p>
+                <Button
+                  onClick={() => router.push("/services")}
+                  variant="outline"
+                >
                   Browse Services
                 </Button>
               </div>
@@ -251,12 +275,17 @@ function CheckoutContent() {
   );
 }
 
-// Main page component with Suspense
 export default function CheckoutPage() {
   return (
     <div className="flex flex-col min-h-screen">
       <Header title="Checkout" />
-      <Suspense fallback={<div className="flex-1 flex justify-center items-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+      <Suspense
+        fallback={
+          <div className="flex-1 flex justify-center items-center">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        }
+      >
         <CheckoutContent />
       </Suspense>
     </div>
