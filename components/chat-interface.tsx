@@ -45,6 +45,7 @@ export default function ChatInterface() {
   const [input, setInput] = useState("")
   const [showCalendar, setShowCalendar] = useState(false)
   const [showFoodMenu, setShowFoodMenu] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
   const router = useRouter()
@@ -58,8 +59,38 @@ export default function ChatInterface() {
     scrollToBottom()
   }, [messages])
 
-  const handleSend = () => {
-    if (!input.trim()) return
+  const sendMessageToBackend = async (messageText: string) => {
+    setIsLoading(true)
+    try {
+      const response = await fetch("/api/concierge", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message: messageText }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to get response from AI")
+      }
+
+      const data = await response.json()
+      return data.response
+    } catch (error) {
+      console.error("Error sending message:", error)
+      toast({
+        title: "Error",
+        description: "Failed to get a response. Please try again.",
+        variant: "destructive",
+      })
+      return "I'm having trouble connecting right now. Please try again in a moment."
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return
 
     const newUserMessage: Message = {
       id: Date.now().toString(),
@@ -70,25 +101,87 @@ export default function ChatInterface() {
     }
 
     setMessages((prev) => [...prev, newUserMessage])
+    const userInput = input
     setInput("")
 
-    // Simulate AI response based on user input
-    setTimeout(() => {
-      let aiResponse: Message
+    // Add typing indicator
+    const typingIndicatorId = Date.now().toString() + "-typing"
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: typingIndicatorId,
+        content: "Typing...",
+        sender: "ai",
+        type: "text",
+        timestamp: new Date(),
+      },
+    ])
 
-      if (input.toLowerCase().includes("spa") || input.toLowerCase().includes("book spa")) {
-        aiResponse = {
-          id: (Date.now() + 1).toString(),
-          content: "Would you like to book a spa appointment? Please select a date and time:",
+    try {
+      // Get response from backend
+      const response = await fetch("/api/concierge", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message: userInput }),
+      })
+
+      // Remove typing indicator
+      setMessages((prev) => prev.filter(msg => msg.id !== typingIndicatorId))
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        let errorMessage = "Failed to get a response. Please try again."
+        
+        if (errorData.error) {
+          errorMessage = errorData.error
+          
+          // Special case for backend connection errors
+          if (errorData.error.includes("Cannot connect to the AI backend")) {
+            errorMessage = "I'm unable to connect to my AI brain right now. Please make sure the backend server is running."
+          }
+        }
+        
+        const errorResponse: Message = {
+          id: Date.now().toString(),
+          content: errorMessage,
+          sender: "ai",
+          type: "text",
+          timestamp: new Date(),
+        }
+        
+        setMessages((prev) => [...prev, errorResponse])
+        
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        })
+        
+        return
+      }
+
+      const data = await response.json()
+      const aiResponseText = data.response
+      
+      // Check if response contains special patterns for structured replies
+      // This is a simple implementation - in a real app you'd parse JSON or use a specific protocol
+      if (aiResponseText.includes("[CALENDAR]")) {
+        setShowCalendar(true)
+        const aiResponse: Message = {
+          id: Date.now().toString(),
+          content: aiResponseText.replace("[CALENDAR]", ""),
           sender: "ai",
           type: "calendar",
           timestamp: new Date(),
         }
-        setShowCalendar(true)
-      } else if (input.toLowerCase().includes("food") || input.toLowerCase().includes("order food")) {
-        aiResponse = {
-          id: (Date.now() + 1).toString(),
-          content: "Here are some dining options available for in-room dining:",
+        setMessages((prev) => [...prev, aiResponse])
+      } else if (aiResponseText.includes("[FOOD_MENU]")) {
+        setShowFoodMenu(true)
+        const aiResponse: Message = {
+          id: Date.now().toString(),
+          content: aiResponseText.replace("[FOOD_MENU]", ""),
           sender: "ai",
           type: "carousel",
           timestamp: new Date(),
@@ -113,45 +206,45 @@ export default function ChatInterface() {
             },
           ],
         }
-        setShowFoodMenu(true)
-      } else if (input.toLowerCase().includes("restaurant") || input.toLowerCase().includes("dining")) {
-        aiResponse = {
-          id: (Date.now() + 1).toString(),
-          content: "Here are our restaurants. Would you like to make a reservation?",
-          sender: "ai",
-          type: "cards",
-          timestamp: new Date(),
-          items: [
-            {
-              title: "The Grand Bistro",
-              description: "Fine dining with panoramic ocean views",
-              image: "/placeholder.svg?height=120&width=200",
-              action: "View Restaurant",
-            },
-            {
-              title: "Seaside Grill",
-              description: "Casual oceanfront dining with fresh seafood",
-              image: "/placeholder.svg?height=120&width=200",
-              action: "View Restaurant",
-            },
-          ],
-        }
+        setMessages((prev) => [...prev, aiResponse])
       } else {
-        aiResponse = {
-          id: (Date.now() + 1).toString(),
-          content: "I'd be happy to help with that. Is there anything specific you'd like to know?",
+        // Regular text response
+        const aiResponse: Message = {
+          id: Date.now().toString(),
+          content: aiResponseText,
           sender: "ai",
-          type: "buttons",
+          type: "text",
           timestamp: new Date(),
-          options: ["Room Service", "Hotel Amenities", "Local Attractions", "Special Requests"],
         }
+        setMessages((prev) => [...prev, aiResponse])
       }
-
-      setMessages((prev) => [...prev, aiResponse])
-    }, 1000)
+    } catch (error) {
+      // Remove typing indicator
+      setMessages((prev) => prev.filter(msg => msg.id !== typingIndicatorId))
+      
+      console.error("Error sending message:", error)
+      
+      const errorResponse: Message = {
+        id: Date.now().toString(),
+        content: "I'm having trouble connecting right now. Please check if the backend server is running and try again in a moment.",
+        sender: "ai",
+        type: "text",
+        timestamp: new Date(),
+      }
+      
+      setMessages((prev) => [...prev, errorResponse])
+      
+      toast({
+        title: "Connection Error",
+        description: "Failed to connect to the AI backend. Please check if the server is running.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleButtonClick = (option: string) => {
+  const handleButtonClick = async (option: string) => {
     const newUserMessage: Message = {
       id: Date.now().toString(),
       content: option,
@@ -162,23 +255,83 @@ export default function ChatInterface() {
 
     setMessages((prev) => [...prev, newUserMessage])
 
-    // Simulate AI response based on button clicked
-    setTimeout(() => {
-      let aiResponse: Message
+    // Add typing indicator
+    const typingIndicatorId = Date.now().toString() + "-typing"
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: typingIndicatorId,
+        content: "Typing...",
+        sender: "ai",
+        type: "text",
+        timestamp: new Date(),
+      },
+    ])
 
-      if (option === "Book Spa") {
-        aiResponse = {
-          id: (Date.now() + 1).toString(),
-          content: "Please select a date and time for your spa appointment:",
+    try {
+      // Get response from backend
+      const response = await fetch("/api/concierge", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message: option }),
+      })
+
+      // Remove typing indicator
+      setMessages((prev) => prev.filter(msg => msg.id !== typingIndicatorId))
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        let errorMessage = "Failed to get a response. Please try again."
+        
+        if (errorData.error) {
+          errorMessage = errorData.error
+          
+          // Special case for backend connection errors
+          if (errorData.error.includes("Cannot connect to the AI backend")) {
+            errorMessage = "I'm unable to connect to my AI brain right now. Please make sure the backend server is running."
+          }
+        }
+        
+        const errorResponse: Message = {
+          id: Date.now().toString(),
+          content: errorMessage,
+          sender: "ai",
+          type: "text",
+          timestamp: new Date(),
+        }
+        
+        setMessages((prev) => [...prev, errorResponse])
+        
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        })
+        
+        return
+      }
+
+      const data = await response.json()
+      const aiResponseText = data.response
+      
+      // Process response similar to handleSend method
+      if (option === "Book Spa" || aiResponseText.includes("[CALENDAR]")) {
+        setShowCalendar(true)
+        const aiResponse: Message = {
+          id: Date.now().toString(),
+          content: aiResponseText.replace("[CALENDAR]", ""),
           sender: "ai",
           type: "calendar",
           timestamp: new Date(),
         }
-        setShowCalendar(true)
-      } else if (option === "Order Food") {
-        aiResponse = {
-          id: (Date.now() + 1).toString(),
-          content: "Here are our dining options:",
+        setMessages((prev) => [...prev, aiResponse])
+      } else if (option === "Order Food" || aiResponseText.includes("[FOOD_MENU]")) {
+        setShowFoodMenu(true)
+        const aiResponse: Message = {
+          id: Date.now().toString(),
+          content: aiResponseText.replace("[FOOD_MENU]", ""),
           sender: "ai",
           type: "carousel",
           timestamp: new Date(),
@@ -203,50 +356,42 @@ export default function ChatInterface() {
             },
           ],
         }
-        setShowFoodMenu(true)
-      } else if (option === "Room Service") {
-        aiResponse = {
-          id: (Date.now() + 1).toString(),
-          content: "What type of room service would you like to request?",
-          sender: "ai",
-          type: "buttons",
-          timestamp: new Date(),
-          options: ["Housekeeping", "Extra Amenities", "Maintenance", "Other"],
-        }
-      } else if (option === "Local Recommendations") {
-        aiResponse = {
-          id: (Date.now() + 1).toString(),
-          content: "Here are some popular attractions near the hotel:",
-          sender: "ai",
-          type: "cards",
-          timestamp: new Date(),
-          items: [
-            {
-              title: "City Museum",
-              description: "A world-renowned collection of art and artifacts, just 10 minutes away.",
-              image: "/placeholder.svg?height=120&width=200",
-              action: "Get Directions",
-            },
-            {
-              title: "Waterfront Park",
-              description: "Beautiful gardens and walking paths along the river, 15 minutes by foot.",
-              image: "/placeholder.svg?height=120&width=200",
-              action: "Learn More",
-            },
-          ],
-        }
+        setMessages((prev) => [...prev, aiResponse])
       } else {
-        aiResponse = {
-          id: (Date.now() + 1).toString(),
-          content: `I'll help you with "${option}". Could you provide more details about what you need?`,
+        // Regular text response
+        const aiResponse: Message = {
+          id: Date.now().toString(),
+          content: aiResponseText,
           sender: "ai",
           type: "text",
           timestamp: new Date(),
         }
+        setMessages((prev) => [...prev, aiResponse])
       }
-
-      setMessages((prev) => [...prev, aiResponse])
-    }, 1000)
+    } catch (error) {
+      // Remove typing indicator
+      setMessages((prev) => prev.filter(msg => msg.id !== typingIndicatorId))
+      
+      console.error("Error sending message:", error)
+      
+      const errorResponse: Message = {
+        id: Date.now().toString(),
+        content: "I'm having trouble connecting right now. Please check if the backend server is running and try again in a moment.",
+        sender: "ai",
+        type: "text",
+        timestamp: new Date(),
+      }
+      
+      setMessages((prev) => [...prev, errorResponse])
+      
+      toast({
+        title: "Connection Error",
+        description: "Failed to connect to the AI backend. Please check if the server is running.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleCalendarConfirm = (date: Date) => {
@@ -326,6 +471,7 @@ export default function ChatInterface() {
                   className={cn(
                     "rounded-2xl px-4 py-2.5 text-sm",
                     message.sender === "user" ? "bg-primary text-primary-foreground" : "bg-muted",
+                    message.id.includes("-typing") && "animate-pulse"
                   )}
                 >
                   <p>{message.content}</p>
@@ -467,11 +613,13 @@ export default function ChatInterface() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault()
                 handleSend()
               }
             }}
             className="rounded-full border-muted bg-muted/50 focus-visible:ring-primary/30"
+            disabled={isLoading}
           />
 
           <Button variant="ghost" size="icon" className="rounded-full" asChild>
@@ -480,8 +628,12 @@ export default function ChatInterface() {
             </Link>
           </Button>
 
-          <Button variant="default" size="icon" className="rounded-full" onClick={handleSend} disabled={!input.trim()}>
+          <Button variant="default" size="icon" className="rounded-full" onClick={handleSend} disabled={isLoading || !input.trim()}>
+            {isLoading ? (
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            ) : (
             <Send className="h-5 w-5" />
+            )}
           </Button>
         </div>
       </div>
