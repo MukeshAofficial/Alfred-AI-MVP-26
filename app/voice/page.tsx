@@ -1,198 +1,166 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Mic, MicOff, ArrowLeft } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { useState, useRef } from "react"
+import { Mic, MicOff, Loader2 } from "lucide-react"
+import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
-import Link from "next/link"
-import Header from "@/components/header"
 import { useToast } from "@/hooks/use-toast"
 
 export default function VoicePage() {
-  const [isListening, setIsListening] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
   const [transcript, setTranscript] = useState("")
   const [aiResponse, setAiResponse] = useState("")
-  const [waveAmplitude, setWaveAmplitude] = useState(20)
-
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
   const { toast } = useToast()
 
-  useEffect(() => {
-    if (isListening) {
-      const interval = setInterval(() => {
-        setWaveAmplitude(Math.random() * 40 + 10)
-      }, 100)
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mediaRecorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = mediaRecorder
+      audioChunksRef.current = []
 
-      // Simulate receiving transcript after 3 seconds
-      const timeout = setTimeout(() => {
-        setIsListening(false)
-
-        // Randomly select one of several possible voice commands
-        const commands = [
-          "Book a dinner reservation for two at 7 PM tonight",
-          "I need extra towels in my room please",
-          "Book a spa appointment for tomorrow afternoon",
-          "What time does the pool close today?",
-        ]
-        const selectedCommand = commands[Math.floor(Math.random() * commands.length)]
-        setTranscript(selectedCommand)
-
-        // Simulate AI response based on the command
-        setTimeout(() => {
-          let response = ""
-
-          if (selectedCommand.includes("dinner")) {
-            response =
-              "I've booked a dinner reservation for two at 7 PM tonight at our main restaurant. Your table is confirmed. Is there anything else you need?"
-          } else if (selectedCommand.includes("towels")) {
-            response =
-              "I've arranged for extra towels to be delivered to your room within the next 15 minutes. Is there anything else you need?"
-          } else if (selectedCommand.includes("spa")) {
-            response =
-              "I've scheduled a spa appointment for you tomorrow at 2 PM. Would you like me to send a confirmation to your phone?"
-          } else if (selectedCommand.includes("pool")) {
-            response = "The pool is open until 10 PM today. Would you like me to book a poolside cabana for you?"
-          }
-
-          setAiResponse(response)
-
-          // Simulate text-to-speech by playing audio
-          if ("speechSynthesis" in window) {
-            const speech = new SpeechSynthesisUtterance(response)
-            speech.rate = 0.9
-            speech.pitch = 1
-            speech.volume = 1
-            window.speechSynthesis.speak(speech)
-          }
-        }, 1000)
-      }, 3000)
-
-      return () => {
-        clearInterval(interval)
-        clearTimeout(timeout)
-        if ("speechSynthesis" in window) {
-          window.speechSynthesis.cancel()
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
         }
       }
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" })
+        await handleSpeechToText(audioBlob)
+        
+        // Stop all audio tracks
+        stream.getAudioTracks().forEach(track => track.stop())
+      }
+
+      mediaRecorder.start()
+      setIsRecording(true)
+    } catch (error) {
+      console.error("Error starting recording:", error)
+      toast({
+        title: "Error",
+        description: "Failed to start recording. Please check your microphone permissions.",
+        variant: "destructive"
+      })
     }
-  }, [isListening])
-
-  const startVoiceRecognition = () => {
-    setIsListening(true)
-
-    // This is just for demonstration - in a real app, you would use the Web Speech API
-    // if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-    //   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    //   const recognition = new SpeechRecognition();
-    //   recognition.continuous = false;
-    //   recognition.interimResults = false;
-    //   recognition.onresult = (event) => {
-    //     const transcript = event.results[0][0].transcript;
-    //     setTranscript(transcript);
-    //     // Process the transcript...
-    //   };
-    //   recognition.start();
-    // }
   }
 
-  const handleToggleListen = () => {
-    if (!isListening) {
-      setTranscript("")
-      setAiResponse("")
-      startVoiceRecognition()
-    } else {
-      setIsListening(false)
-      if ("speechSynthesis" in window) {
-        window.speechSynthesis.cancel()
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop()
+      setIsRecording(false)
+    }
+  }
+
+  const handleSpeechToText = async (recordedBlob: Blob) => {
+    setIsProcessing(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", recordedBlob, "recording.webm")
+
+      // Convert speech to text
+      const transcriptionResponse = await fetch("/api/speech-to-text", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!transcriptionResponse.ok) {
+        throw new Error("Failed to transcribe audio")
       }
+
+      const { text } = await transcriptionResponse.json()
+      setTranscript(text)
+
+      // Send to backend FastAPI server
+      const chatResponse = await fetch("http://localhost:8000/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message: text }),
+      })
+
+      if (!chatResponse.ok) {
+        throw new Error("Failed to get AI response")
+      }
+
+      const { response } = await chatResponse.json()
+      setAiResponse(response)
+
+      // Convert response to speech
+      const speechResponse = await fetch("/api/text-to-speech", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text: response }),
+      })
+
+      if (!speechResponse.ok) {
+        throw new Error("Failed to convert text to speech")
+      }
+
+      const audioBlob = await speechResponse.blob()
+      const audioUrl = URL.createObjectURL(audioBlob)
+      const audio = new Audio(audioUrl)
+      audio.play()
+    } catch (error) {
+      console.error("Error processing voice request:", error)
+      toast({
+        title: "Error",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsProcessing(false)
     }
   }
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <Header title="Voice Assistant" />
-
-      <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
-        <Link href="/" className="absolute top-4 left-4 p-2 rounded-full hover:bg-muted transition-colors">
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-
-        <div
-          className={cn(
-            "w-full max-w-md aspect-square rounded-full flex items-center justify-center relative",
-            "bg-gradient-to-br from-background to-muted",
-            "border border-primary/10",
-            "transition-all duration-300",
-            isListening ? "scale-105 shadow-lg shadow-primary/10" : "",
-          )}
-        >
-          {/* Animated waveform */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            {Array.from({ length: 30 }).map((_, i) => (
-              <div
-                key={i}
-                className={cn(
-                  "w-1 mx-0.5 bg-primary/60 rounded-full transition-all duration-150",
-                  isListening ? "animate-pulse" : "h-1",
-                )}
-                style={{
-                  height: isListening ? `${Math.sin(i * 0.5) * waveAmplitude + 20}px` : "4px",
-                  opacity: isListening ? 0.2 + Math.sin(i * 0.5) * 0.8 : 0.3,
-                }}
-              />
-            ))}
-          </div>
-
-          <Button
-            variant={isListening ? "destructive" : "default"}
-            size="lg"
+    <div className="flex flex-col min-h-screen items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <div className="flex flex-col items-center space-y-4">
+          <motion.button
+            onClick={isRecording ? stopRecording : startRecording}
+            disabled={isProcessing}
+            whileTap={{ scale: 0.95 }}
+            whileHover={{ scale: 1.05 }}
             className={cn(
-              "rounded-full h-24 w-24 transition-all duration-300",
-              isListening
-                ? "bg-destructive/90 hover:bg-destructive/100 shadow-lg"
-                : "bg-primary/90 hover:bg-primary/100",
+              "w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg",
+              isRecording
+                ? "bg-red-500 animate-pulse shadow-red-500/50"
+                : isProcessing
+                ? "bg-gray-400"
+                : "bg-primary hover:bg-primary/90"
             )}
-            onClick={handleToggleListen}
           >
-            {isListening ? <MicOff className="h-10 w-10" /> : <Mic className="h-10 w-10" />}
-          </Button>
+            {isProcessing ? (
+              <Loader2 className="h-10 w-10 text-white animate-spin" />
+            ) : isRecording ? (
+              <MicOff className="h-10 w-10 text-white" />
+            ) : (
+              <Mic className="h-10 w-10 text-white" />
+            )}
+          </motion.button>
+
+          {transcript && (
+            <div className="w-full bg-muted rounded-lg p-4">
+              <p className="text-sm text-muted-foreground">You said:</p>
+              <p className="mt-1">{transcript}</p>
+            </div>
+          )}
+
+          {aiResponse && (
+            <div className="w-full bg-primary/10 rounded-lg p-4 border border-primary/20">
+              <p className="text-sm text-primary">AI Butler:</p>
+              <p className="mt-1">{aiResponse}</p>
+            </div>
+          )}
         </div>
-
-        {transcript && (
-          <div className="mt-8 w-full max-w-md">
-            <div className="bg-muted rounded-2xl p-4 text-sm">
-              <p className="text-xs text-muted-foreground mb-1">You said:</p>
-              <p>{transcript}</p>
-            </div>
-          </div>
-        )}
-
-        {aiResponse && (
-          <div className="mt-4 w-full max-w-md">
-            <div className="bg-primary/10 rounded-2xl p-4 text-sm border border-primary/20">
-              <p className="text-xs text-primary mb-1">AI Butler:</p>
-              <p>{aiResponse}</p>
-            </div>
-          </div>
-        )}
-
-        {aiResponse && (
-          <div className="mt-8 flex justify-center">
-            <Button
-              className="rounded-full px-6"
-              onClick={() => {
-                toast({
-                  title: "Booking Confirmed",
-                  description: "Your request has been processed successfully.",
-                  duration: 3000,
-                })
-              }}
-            >
-              Confirm & Book
-            </Button>
-          </div>
-        )}
       </div>
     </div>
   )
-}
-
+} 

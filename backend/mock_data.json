@@ -1,0 +1,177 @@
+{
+  "hotel": {
+    "name": "The AI Butler Hotel",
+    "services": [
+      {
+        "id": "room-service-1",
+        "name": "24/7 Room Service",
+        "description": "Round-the-clock room service with a diverse menu of international cuisine, available for delivery to your room.",
+        "price": 0,
+        "duration": 30,
+        "vendor": "Hotel Service",
+        "type": "room_service",
+        "location": "In-room"
+      },
+      {
+        "id": "housekeeping-1",
+        "name": "Daily Housekeeping",
+        "description": "Professional housekeeping service including room cleaning, bed making, and bathroom maintenance.",
+        "price": 0,
+        "duration": 30,
+        "vendor": "Hotel Service",
+        "type": "room_service",
+        "location": "In-room"
+      },
+      {
+        "id": "laundry-1",
+        "name": "Express Laundry Service",
+        "description": "Same-day laundry and dry cleaning service for hotel guests.",
+        "price": 15,
+        "duration": 240,
+        "vendor": "Hotel Service",
+        "type": "room_service",
+        "location": "In-room pickup"
+      },
+      {
+        "id": "taxi-1",
+        "name": "Hotel Taxi Service",
+        "description": "24/7 taxi service for hotel guests. Available for airport transfers, city tours, and general transportation needs.",
+        "price": 25,
+        "duration": 0,
+        "vendor": "Reliable Taxi Co.",
+        "type": "transport",
+        "location": "Hotel entrance"
+      },
+      {
+        "id": "shuttle-1",
+        "name": "Airport Shuttle",
+        "description": "Complimentary shuttle service to and from the airport, running every 30 minutes.",
+        "price": 0,
+        "duration": 45,
+        "vendor": "Hotel Service",
+        "type": "transport",
+        "location": "Hotel entrance"
+      },
+      {
+        "id": "jazz-night-1",
+        "name": "Jazz Night",
+        "description": "Live jazz performance in the hotel lounge",
+        "price": 0,
+        "duration": 120,
+        "vendor": "Hotel Entertainment",
+        "type": "entertainment",
+        "location": "Hotel Lounge"
+      }
+    ]
+  },
+  "restaurants": [
+    {
+      "name": "The Grand Bistro",
+      "cuisine": "French",
+      "menu": [
+        {
+          "item": "Beef Bourguignon",
+          "description": "Classic French beef stew with red wine, mushrooms, and pearl onions",
+          "price": "$32"
+        },
+        {
+          "item": "Coq au Vin",
+          "description": "Chicken braised with wine, mushrooms, and garlic",
+          "price": "$28"
+        },
+        {
+          "item": "Ratatouille",
+          "description": "Provençal vegetable stew with eggplant, zucchini, and bell peppers",
+          "price": "$22"
+        }
+      ]
+    },
+    {
+      "name": "Seaside Grill",
+      "cuisine": "Seafood",
+      "menu": [
+        {
+          "item": "Grilled Lobster",
+          "description": "Fresh Maine lobster with garlic butter and lemon",
+          "price": "$45"
+        },
+        {
+          "item": "Seafood Paella",
+          "description": "Spanish rice dish with shrimp, mussels, and calamari",
+          "price": "$38"
+        },
+        {
+          "item": "Grilled Salmon",
+          "description": "Wild-caught salmon with herb butter and seasonal vegetables",
+          "price": "$32"
+        }
+      ]
+    }
+  ],
+  "spa_services": [
+    {
+      "name": "Deep Tissue Massage",
+      "description": "A therapeutic massage that targets the deeper layers of muscles and connective tissue",
+      "duration": 60,
+      "price": 120
+    },
+    {
+      "name": "Hot Stone Therapy",
+      "description": "A relaxing massage using heated stones to release muscle tension",
+      "duration": 90,
+      "price": 150
+    },
+    {
+      "name": "Facial Treatment",
+      "description": "Customized facial treatment with premium skincare products",
+      "duration": 45,
+      "price": 85
+    }
+  ],
+  "attractions": [
+    {
+      "name": "City Highlights Tour",
+      "description": "A guided tour of the city's most famous landmarks and attractions",
+      "location": "City Center",
+      "price": 50
+    },
+    {
+      "name": "Wine Tasting Experience",
+      "description": "Visit to local vineyards with wine tasting and lunch",
+      "location": "Vineyard District",
+      "price": 75
+    },
+    {
+      "name": "Sunset Cruise",
+      "description": "Evening boat tour with dinner and live music",
+      "location": "Harbor",
+      "price": 65
+    }
+  ],
+  "entertainment": [
+    {
+      "name": "Jazz Night",
+      "description": "Live jazz performance in the hotel lounge",
+      "price": 0,
+      "vendor": "Hotel Entertainment",
+      "type": "entertainment",
+      "location": "Hotel Lounge"
+    },
+    {
+      "name": "Magic Show",
+      "description": "Family-friendly magic show with dinner",
+      "price": 35,
+      "vendor": "Magic Entertainment Co.",
+      "type": "entertainment",
+      "location": "Grand Ballroom"
+    },
+    {
+      "name": "Movie Night",
+      "description": "Outdoor movie screening with popcorn and drinks",
+      "price": 15,
+      "vendor": "Hotel Entertainment",
+      "type": "entertainment",
+      "location": "Garden Terrace"
+    }
+  ]
+} 

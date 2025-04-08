@@ -31,6 +31,8 @@ interface Message {
   }[]
 }
 
+type FormattedLine = string;
+
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -50,6 +52,7 @@ export default function ChatInterface() {
   const { toast } = useToast()
   const router = useRouter()
   const isMobile = useMobile()
+  const [sessionId, setSessionId] = useState("")
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -124,7 +127,10 @@ export default function ChatInterface() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ message: userInput }),
+        body: JSON.stringify({ 
+          message: userInput,
+          session_id: sessionId 
+        }),
       })
 
       // Remove typing indicator
@@ -136,11 +142,6 @@ export default function ChatInterface() {
         
         if (errorData.error) {
           errorMessage = errorData.error
-          
-          // Special case for backend connection errors
-          if (errorData.error.includes("Cannot connect to the AI backend")) {
-            errorMessage = "I'm unable to connect to my AI brain right now. Please make sure the backend server is running."
-          }
         }
         
         const errorResponse: Message = {
@@ -152,21 +153,26 @@ export default function ChatInterface() {
         }
         
         setMessages((prev) => [...prev, errorResponse])
-        
-        toast({
-          title: "Error",
-          description: errorMessage,
-          variant: "destructive",
-        })
-        
         return
       }
 
       const data = await response.json()
       const aiResponseText = data.response
       
-      // Check if response contains special patterns for structured replies
-      // This is a simple implementation - in a real app you'd parse JSON or use a specific protocol
+      // Update session ID
+      if (data.session_id) {
+        setSessionId(data.session_id)
+      }
+      
+      // Check for booking tag
+      const bookingMatch = aiResponseText.match(/\[BOOKING:([^\]]+)\]/)
+      if (bookingMatch) {
+        const serviceId = bookingMatch[1]
+        router.push(`/booking/${serviceId}`)
+        return
+      }
+      
+      // Check for calendar tag
       if (aiResponseText.includes("[CALENDAR]")) {
         setShowCalendar(true)
         const aiResponse: Message = {
@@ -177,7 +183,9 @@ export default function ChatInterface() {
           timestamp: new Date(),
         }
         setMessages((prev) => [...prev, aiResponse])
-      } else if (aiResponseText.includes("[FOOD_MENU]")) {
+      } 
+      // Check for food menu tag
+      else if (aiResponseText.includes("[FOOD_MENU]")) {
         setShowFoodMenu(true)
         const aiResponse: Message = {
           id: Date.now().toString(),
@@ -207,11 +215,27 @@ export default function ChatInterface() {
           ],
         }
         setMessages((prev) => [...prev, aiResponse])
-      } else {
-        // Regular text response
+      } 
+      // Regular text response with formatting
+      else {
+        const formattedContent = aiResponseText
+          .split('\n')
+          .map((line: FormattedLine) => {
+            // Format bold text
+            line = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            // Format lists
+            line = line.replace(/^\s*-\s*(.*)/g, '• $1')
+            // Format prices
+            line = line.replace(/\$(\d+)/g, '<span class="text-primary font-medium">$$1</span>')
+            // Format durations
+            line = line.replace(/(\d+)\s+minutes/g, '<span class="text-muted-foreground">$1 minutes</span>')
+            return line
+          })
+          .join('\n')
+        
         const aiResponse: Message = {
           id: Date.now().toString(),
-          content: aiResponseText,
+          content: formattedContent,
           sender: "ai",
           type: "text",
           timestamp: new Date(),
@@ -233,12 +257,6 @@ export default function ChatInterface() {
       }
       
       setMessages((prev) => [...prev, errorResponse])
-      
-      toast({
-        title: "Connection Error",
-        description: "Failed to connect to the AI backend. Please check if the server is running.",
-        variant: "destructive",
-      })
     } finally {
       setIsLoading(false)
     }
@@ -474,7 +492,10 @@ export default function ChatInterface() {
                     message.id.includes("-typing") && "animate-pulse"
                   )}
                 >
-                  <p>{message.content}</p>
+                  <div 
+                    className="prose prose-sm max-w-none"
+                    dangerouslySetInnerHTML={{ __html: message.content }}
+                  />
                   <div
                     className={cn("text-xs mt-1 opacity-70", message.sender === "user" ? "text-right" : "text-left")}
                   >
