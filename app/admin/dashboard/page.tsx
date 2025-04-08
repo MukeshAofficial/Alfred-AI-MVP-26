@@ -105,9 +105,9 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => router.push("/admin/upload-services")}>
+          <Button variant="outline" onClick={() => router.push("/admin/services/new")}>
             <Plus className="mr-2 h-4 w-4" />
-            Add Service
+            Add New Service
           </Button>
           <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => router.push("/admin/bookings")}>
             View All Bookings

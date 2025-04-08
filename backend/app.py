@@ -224,7 +224,7 @@ class ChatRequest(BaseModel):
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
-    try:
+  try:
     response = await agent.ainvoke({
         "messages": [
             system_prompt,
@@ -232,7 +232,7 @@ async def chat(req: ChatRequest):
         ]
     })
     last_message = response['messages'][-1]
-        return {"response": last_message.content}
-    except Exception as e:
+    return {"response": last_message.content}
+  except Exception as e:
         print(f"Chat error: {e}")
         return {"response": "Sorry, something went wrong processing your request. Please try again."}
