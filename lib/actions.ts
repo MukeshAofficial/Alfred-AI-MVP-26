@@ -3,7 +3,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import Stripe from 'stripe'
 import { redirect } from 'next/navigation'
-import { ServiceData } from './services-db'
+import { SpaDB } from './spa-db'
 
 // Initialize Stripe with your secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
@@ -26,66 +26,68 @@ interface CreateBookingParams {
   vendorId?: string;
 }
 
-export async function createCheckoutSession({ 
-  serviceId, 
-  bookingDate, 
-  userId = 'guest' 
+export async function createCheckoutSession({
+  serviceId,
+  bookingDate,
+  userId,
 }: CheckoutSessionParams) {
-  if (!serviceId) {
-    throw new Error('Service ID is required')
-  }
-
   try {
-    // Get the service details from the database
+    if (!serviceId) {
+      throw new Error('Service ID is required')
+    }
+
+    // Get user details from Supabase
     const supabase = createServerSupabaseClient()
-    const { data: service, error } = await supabase
-      .from('services')
-      .select('*')
-      .eq('id', serviceId)
-      .single()
+    const spaDB = SpaDB.getInstance()
 
-    if (error || !service) {
-      throw new Error(`Service not found: ${error?.message}`)
+    // Get service details
+    const service = await spaDB.getSpaServiceById(serviceId)
+    if (!service) {
+      throw new Error(`Service with ID ${serviceId} not found`)
     }
 
-    // Get user information if available (for guest identification)
-    let customerId = userId;
-    let customerEmail = null;
-    
-    if (customerId === 'guest') {
-      const { data: userData } = await supabase.auth.getUser()
-      if (userData?.user?.id) {
-        customerId = userData.user.id;
-        customerEmail = userData.user.email;
-      }
+    // Get spa details
+    const spa = await spaDB.getSpaById(service.spa_id)
+    if (!spa) {
+      throw new Error(`Spa with ID ${service.spa_id} not found`)
     }
 
-    // Get additional user details if available
+    // Get customer info if userId is provided
+    let customerEmail = 'guest@example.com' // Default
+    let customerName = 'Guest User' // Default
+    let customerId = userId || 'guest'
     let userDetails = null
-    if (customerId !== 'guest') {
-      const { data: profile } = await supabase
+
+    if (userId) {
+      const { data: userData, error: userError } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', customerId)
+        .eq('id', userId)
         .single()
-      
-      userDetails = profile
-      if (profile?.email) {
-        customerEmail = profile.email;
+
+      if (userError) {
+        console.error('Error fetching user data:', userError)
+      }
+
+      if (userData) {
+        userDetails = userData
+        customerEmail = userData.email || customerEmail
+        customerName = userData.full_name || userData.username || customerName
       }
     }
 
-    // Format the booking date if provided
-    const formattedBookingDate = bookingDate || new Date().toISOString().split('T')[0];
-    
-    // Build the success URL with booking date parameter
-    const successUrl = new URL(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/profile`);
-    successUrl.searchParams.append('success', 'true');
-    successUrl.searchParams.append('tab', 'bookings');
-    successUrl.searchParams.append('session_id', '{CHECKOUT_SESSION_ID}');
-    successUrl.searchParams.append('booking_date', formattedBookingDate);
+    // Format the booking date for metadata
+    const formattedBookingDate = bookingDate || new Date().toISOString().split('T')[0]
 
-    console.log(`Creating Stripe checkout session for service: ${serviceId}, user: ${customerId}, date: ${formattedBookingDate}, vendor: ${service.vendor_id}`);
+    // Set success URL with query parameters for post-purchase page
+    const successUrl = new URL(
+      `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/booking-success`
+    )
+    successUrl.searchParams.append('serviceId', serviceId)
+    successUrl.searchParams.append('bookingDate', formattedBookingDate)
+    if (userId) successUrl.searchParams.append('userId', userId)
+
+    console.log(`Creating Stripe checkout session for service: ${serviceId}, user: ${customerId}, date: ${formattedBookingDate}, spa: ${spa.id}`);
 
     // Create a Stripe checkout session
     const stripeSession = await stripe.checkout.sessions.create({
@@ -106,7 +108,7 @@ export async function createCheckoutSession({
       ],
       mode: 'payment',
       success_url: successUrl.toString(),
-      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/checkout?serviceId=${serviceId}&canceled=true`,
+      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/spa-services?canceled=true`,
       customer_email: customerEmail,
       metadata: {
         serviceId: service.id,
@@ -114,7 +116,8 @@ export async function createCheckoutSession({
         serviceName: service.name,
         userFullName: userDetails?.full_name || '',
         bookingDate: formattedBookingDate,
-        vendorId: service.vendor_id || '',
+        spaId: spa.id,
+        spaName: spa.name,
         servicePrice: service.price.toString(),
         serviceCurrency: service.currency || 'usd'
       },

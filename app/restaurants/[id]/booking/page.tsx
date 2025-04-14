@@ -13,6 +13,7 @@ import Header from "@/components/header"
 import Navigation from "@/components/navigation"
 import { useMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
+import React from "react"
 
 // Mock restaurant data
 const restaurantData = {
@@ -84,7 +85,10 @@ const timeSlots = [
 export default function RestaurantBookingPage() {
   const params = useParams()
   const router = useRouter()
-  const restaurantId = params.id as string
+  
+  // Unwrap params using React.use()
+  const unwrappedParams = React.use(params)
+  const restaurantId = unwrappedParams.id as string
   const [restaurant, setRestaurant] = useState(restaurantData[restaurantId])
   const [selectedDate, setSelectedDate] = useState("")
   const [selectedTime, setSelectedTime] = useState("")

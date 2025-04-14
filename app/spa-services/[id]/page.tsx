@@ -1,591 +1,362 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, Star, Clock, Check, Info } from "lucide-react"
+import React, { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { MapPin, Clock, DollarSign, Users, Calendar, Star, ArrowLeft, BadgeCheck, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Calendar as CalendarComponent } from "@/components/ui/calendar"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import Header from "@/components/header"
 import Navigation from "@/components/navigation"
+import { SpaDB } from "@/lib/spa-db"
+import { AdminSpa, AdminSpaService } from "@/types/spa"
+import { createCheckoutSession } from "@/lib/actions"
+import { useAuth } from "@/contexts/auth-context"
+import { useToast } from "@/hooks/use-toast"
 
-// Mock spa data
-const spaData = {
-  "serenity-spa": {
-    id: "serenity-spa",
-    name: "Serenity Spa & Wellness",
-    description:
-      "Indulge in ultimate relaxation with our premium spa treatments. Our skilled therapists use luxury products and ancient techniques to provide a rejuvenating experience.",
-    images: ["/placeholder.svg?height=400&width=600"],
-    rating: 4.9,
-    reviews: 89,
-    priceRange: "$$$",
-    openingHours: "9:00 AM - 8:00 PM",
-    location: "Wellness Center, Floor 2",
-    treatments: [
-      {
-        id: "t1",
-        name: "Swedish Massage",
-        description: "A gentle full body massage designed to improve circulation and relieve tension.",
-        duration: 60,
-        price: 120,
-        availability: true,
-        category: "massage",
-        image: "/placeholder.svg?height=200&width=300",
-      },
-      {
-        id: "t2",
-        name: "Deep Tissue Massage",
-        description:
-          "Targets the deeper layers of muscle and connective tissue to release chronic patterns of tension.",
-        duration: 60,
-        price: 140,
-        availability: true,
-        category: "massage",
-        image: "/placeholder.svg?height=200&width=300",
-      },
-      {
-        id: "t3",
-        name: "Hot Stone Massage",
-        description: "Heated stones are placed on specific areas of the body to warm and loosen tight muscles.",
-        duration: 90,
-        price: 160,
-        availability: false,
-        category: "massage",
-        image: "/placeholder.svg?height=200&width=300",
-      },
-      {
-        id: "t4",
-        name: "Aromatherapy Massage",
-        description: "Essential oils are added to a gentle massage to promote relaxation and well-being.",
-        duration: 60,
-        price: 130,
-        availability: true,
-        category: "massage",
-        image: "/placeholder.svg?height=200&width=300",
-      },
-      {
-        id: "t5",
-        name: "Facial Treatment",
-        description: "A customized facial to cleanse, exfoliate, and nourish the skin.",
-        duration: 60,
-        price: 110,
-        availability: true,
-        category: "facial",
-        image: "/placeholder.svg?height=200&width=300",
-      },
-      {
-        id: "t6",
-        name: "Anti-Aging Facial",
-        description: "Advanced treatment designed to reduce fine lines and improve skin elasticity.",
-        duration: 75,
-        price: 150,
-        availability: true,
-        category: "facial",
-        image: "/placeholder.svg?height=200&width=300",
-      },
-      {
-        id: "t7",
-        name: "Body Scrub & Wrap",
-        description: "Exfoliating scrub followed by a hydrating body wrap to rejuvenate the skin.",
-        duration: 90,
-        price: 170,
-        availability: true,
-        category: "body",
-        image: "/placeholder.svg?height=200&width=300",
-      },
-      {
-        id: "t8",
-        name: "Manicure & Pedicure",
-        description: "Luxury nail care treatment for hands and feet.",
-        duration: 90,
-        price: 100,
-        availability: true,
-        category: "beauty",
-        image: "/placeholder.svg?height=200&width=300",
-      },
-    ],
-  },
-  "zen-wellness": {
-    id: "zen-wellness",
-    name: "Zen Wellness Center",
-    description: "Find your inner peace with our holistic wellness treatments and therapies.",
-    images: ["/placeholder.svg?height=400&width=600"],
-    rating: 4.7,
-    reviews: 65,
-    priceRange: "$$",
-    openingHours: "8:00 AM - 7:00 PM",
-    location: "North Wing, Floor 3",
-    treatments: [
-      {
-        id: "z1",
-        name: "Zen Massage",
-        description: "A balanced massage combining Eastern and Western techniques for total relaxation.",
-        duration: 60,
-        price: 110,
-        availability: true,
-        category: "massage",
-        image: "/placeholder.svg?height=200&width=300",
-      },
-      {
-        id: "z2",
-        name: "Meditation Session",
-        description: "Guided meditation to reduce stress and promote mindfulness.",
-        duration: 45,
-        price: 80,
-        availability: true,
-        category: "wellness",
-        image: "/placeholder.svg?height=200&width=300",
-      },
-    ],
-  },
+interface PageParams {
+  id: string;
 }
 
-// Available time slots
-const timeSlots = [
-  "9:00 AM",
-  "9:30 AM",
-  "10:00 AM",
-  "10:30 AM",
-  "11:00 AM",
-  "11:30 AM",
-  "12:00 PM",
-  "12:30 PM",
-  "1:00 PM",
-  "1:30 PM",
-  "2:00 PM",
-  "2:30 PM",
-  "3:00 PM",
-  "3:30 PM",
-  "4:00 PM",
-  "4:30 PM",
-  "5:00 PM",
-  "5:30 PM",
-  "6:00 PM",
-  "6:30 PM",
-  "7:00 PM",
-]
-
-export default function SpaServicePage() {
-  const params = useParams()
+export default function SpaDetailsPage({ params }: { params: PageParams }) {
   const router = useRouter()
-  const spaId = params.id as string
-  const [spa, setSpa] = useState<any>(null)
+  const { user } = useAuth()
+  const { toast } = useToast()
+  
+  // Unwrap params using React.use()
+  const unwrappedParams = React.use(params)
+  const spaId = unwrappedParams.id
+  
+  const [spa, setSpa] = useState<AdminSpa | null>(null)
+  const [services, setServices] = useState<AdminSpaService[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
-  const [activeCategory, setActiveCategory] = useState("all")
-  const [selectedTreatment, setSelectedTreatment] = useState<any>(null)
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
-  const [selectedTime, setSelectedTime] = useState("")
-  const [bookingConfirmed, setBookingConfirmed] = useState(false)
+  const [selectedService, setSelectedService] = useState<AdminSpaService | null>(null)
   const [isBookingDialogOpen, setIsBookingDialogOpen] = useState(false)
-
-  useEffect(() => {
-    // Simulate API fetch
-    setTimeout(() => {
-      if (spaData[spaId]) {
-        setSpa(spaData[spaId])
-        setLoading(false)
-      } else {
-        setError(true)
-        setLoading(false)
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(getTomorrowDate())
+  const [processingPayment, setProcessingPayment] = useState(false)
+  const [dbSetupError, setDbSetupError] = useState<string | null>(null)
+  
+  // Get tomorrow's date for default booking date
+  function getTomorrowDate() {
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    return tomorrow
+  }
+  
+  const fetchSpaDetails = async () => {
+    setLoading(true)
+    setDbSetupError(null)
+    try {
+      const spaDb = SpaDB.getInstance()
+      
+      // Check if tables exist first
+      const tablesExist = await spaDb.checkTablesExist();
+      if (!tablesExist) {
+        setDbSetupError("Required database tables do not exist. The system needs to be initialized.");
+        setLoading(false);
+        return;
       }
-    }, 500)
-  }, [spaId])
-
-  const handleBookTreatment = (treatment) => {
-    setSelectedTreatment(treatment)
-    setIsBookingDialogOpen(true)
-  }
-
-  const confirmBooking = () => {
-    // In a real app, this would send the booking to an API
-    setBookingConfirmed(true)
-    setIsBookingDialogOpen(false)
-
-    // Redirect to bookings page after a short delay
-    setTimeout(() => {
-      router.push("/bookings")
-    }, 3000)
-  }
-
-  // Get all treatment categories
-  const getCategories = () => {
-    if (!spa) return []
-
-    const categories = new Set(spa.treatments.map((t) => t.category))
-    return ["all", ...Array.from(categories)]
-  }
-
-  // Filter treatments by category
-  const getFilteredTreatments = () => {
-    if (!spa) return []
-
-    if (activeCategory === "all") {
-      return spa.treatments
+      
+      // Get the spa's details
+      const spaData = await spaDb.getSpaById(spaId)
+      setSpa(spaData)
+      
+      // Get the spa's services
+      if (spaData) {
+        const servicesData = await spaDb.getSpaServicesBySpaId(spaData.id)
+        setServices(servicesData)
+      }
+    } catch (error) {
+      console.error("Failed to fetch spa details:", error)
+      let errorMessage = "Could not load spa information. Please try again."
+      
+      if (error instanceof Error) {
+        errorMessage = error.message
+        
+        // Check for database setup errors
+        if (errorMessage.includes("database") && errorMessage.includes("tables")) {
+          setDbSetupError(errorMessage)
+        }
+      }
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
     }
-
-    return spa.treatments.filter((t) => t.category === activeCategory)
   }
-
-  // Format date for display
-  const formatDate = (date) => {
-    return new Intl.DateTimeFormat("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    }).format(date)
+  
+  useEffect(() => {
+    fetchSpaDetails()
+  }, [spaId])
+  
+  const handleBooking = async () => {
+    if (!selectedService || !selectedDate) return
+    
+    setProcessingPayment(true)
+    try {
+      // Format the date as YYYY-MM-DD
+      const formattedDate = selectedDate.toISOString().split('T')[0]
+      
+      // Create a Stripe checkout session
+      const result = await createCheckoutSession({
+        serviceId: selectedService.id,
+        bookingDate: formattedDate,
+        userId: user?.id,
+      })
+      
+      if (result?.sessionUrl) {
+        // Redirect to Stripe Checkout
+        window.location.href = result.sessionUrl
+      } else {
+        throw new Error("Could not create checkout session")
+      }
+    } catch (error) {
+      console.error("Payment error:", error)
+      toast({
+        title: "Payment Error",
+        description: "There was a problem processing your booking. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setProcessingPayment(false)
+    }
   }
-
-  if (loading) {
-    return (
-      <div className="flex flex-col min-h-screen">
-        <Header title="Spa Services" />
-        <div className="container mx-auto px-4 py-8 flex-1">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-            <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-            <div className="h-64 bg-gray-200 rounded"></div>
-            <div className="h-8 bg-gray-200 rounded w-full"></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-32 bg-gray-200 rounded"></div>
-              ))}
-            </div>
-          </div>
-        </div>
-        <Navigation />
-      </div>
-    )
+  
+  // Format price with currency
+  const formatPrice = (price: number, currency: string) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency,
+    }).format(price)
   }
-
-  if (error) {
-    return (
-      <div className="flex flex-col min-h-screen">
-        <Header title="Spa Services" />
-        <div className="container mx-auto px-4 py-8 flex-1 flex flex-col items-center justify-center">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold mb-4">Spa Not Found</h2>
-            <p className="text-gray-600 mb-6">We couldn't find the spa you're looking for. Please try again later.</p>
-            <Button onClick={() => router.push("/spa-services")}>Browse Spa Services</Button>
-          </div>
-        </div>
-        <Navigation />
-      </div>
-    )
+  
+  const getServiceStatusColor = (status: string) => {
+    switch (status) {
+      case "available":
+        return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+      case "unavailable":
+        return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
+      case "featured":
+        return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+      default:
+        return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
+    }
   }
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Header title={spa.name} />
-
-      <div className="container mx-auto px-4 py-6 flex-1 pb-20">
-        <div className="flex items-center mb-4">
-          <Button variant="ghost" size="sm" onClick={() => router.back()} className="mr-2">
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Back
+      <Header title={spa?.name || "Spa Details"} />
+      
+      <main className="flex-1 container mx-auto px-4 py-6 pb-20">
+        <Button 
+          variant="ghost" 
+          className="mb-6 -ml-2"
+          onClick={() => router.push("/spa-services")}
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Spa Services
           </Button>
-        </div>
-
-        <div className="flex flex-col md:flex-row gap-8">
-          {/* Spa Details */}
-          <div className="w-full md:w-2/3">
-            <h1 className="text-3xl font-bold mb-2">{spa.name}</h1>
-            <div className="flex items-center gap-2 mb-4">
-              <Badge variant="outline">{spa.priceRange}</Badge>
-              <div className="flex items-center">
-                <Star className="h-4 w-4 text-yellow-500 mr-1" />
-                <span>{spa.rating}</span>
-                <span className="text-gray-500 text-sm ml-1">({spa.reviews} reviews)</span>
-              </div>
+        
+        {dbSetupError && (
+          <Alert className="bg-amber-50 border-amber-200 text-amber-800 mb-6">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Database Setup Required</AlertTitle>
+            <AlertDescription>
+              {dbSetupError}
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {loading ? (
+          <div className="space-y-6">
+            <Skeleton className="h-12 w-2/3" />
+            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-64 w-full" />
             </div>
-
-            <div className="relative h-80 mb-6 rounded-lg overflow-hidden">
-              <img src={spa.images[0] || "/placeholder.svg"} alt={spa.name} className="w-full h-full object-cover" />
-            </div>
-
-            <p className="text-gray-700 mb-6">{spa.description}</p>
-
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold mb-2">Information</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg">Opening Hours</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p>{spa.openingHours}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg">Location</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p>{spa.location}</p>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold mb-4">Treatments & Services</h2>
-
-              <Tabs defaultValue="all" value={activeCategory} onValueChange={setActiveCategory}>
-                <TabsList className="mb-6">
-                  {getCategories().map((category) => (
-                    <TabsTrigger key={category} value={category} className="capitalize">
-                      {category}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-
-                <TabsContent value={activeCategory} className="space-y-4">
-                  {getFilteredTreatments().map((treatment) => (
-                    <Card key={treatment.id}>
-                      <CardContent className="p-0">
-                        <div className="flex flex-col sm:flex-row">
-                          <div className="w-full sm:w-1/3 h-48 sm:h-auto">
-                            <img
-                              src={treatment.image || "/placeholder.svg"}
-                              alt={treatment.name}
-                              className="w-full h-full object-cover rounded-t-lg sm:rounded-l-lg sm:rounded-t-none"
-                            />
-                          </div>
-                          <div className="w-full sm:w-2/3 p-4">
-                            <div className="flex justify-between items-start">
-                              <h3 className="font-medium text-lg">{treatment.name}</h3>
-                              <span className="font-medium text-lg">${treatment.price}</span>
-                            </div>
-                            <p className="text-gray-600 mt-1 mb-3">{treatment.description}</p>
-                            <div className="flex flex-wrap items-center justify-between">
-                              <div className="flex items-center text-gray-500 mb-2 sm:mb-0">
-                                <Clock className="h-4 w-4 mr-1" />
-                                <span>{treatment.duration} minutes</span>
-                              </div>
+        ) : dbSetupError ? (
+          <div className="text-center py-12">
+            <h2 className="text-xl font-bold text-amber-600 mb-4">Database Setup Required</h2>
+            <p className="text-muted-foreground mb-6">{dbSetupError}</p>
+            <div className="max-w-xl mx-auto p-6 bg-amber-50 border border-amber-200 rounded-md">
+              <p className="mb-4">To fix this issue, you need to initialize the database with required tables:</p>
+              <ol className="list-decimal list-inside text-left mb-4 space-y-2">
+                <li>Please contact the system administrator to initialize the database</li>
+                <li>Once the initialization is complete, you can view spa services</li>
+              </ol>
                               <Button
-                                className={
-                                  treatment.availability
-                                    ? "bg-purple-600 hover:bg-purple-700"
-                                    : "bg-gray-400 cursor-not-allowed"
-                                }
-                                disabled={!treatment.availability}
-                                onClick={() => handleBookTreatment(treatment)}
-                              >
-                                {treatment.availability ? "Book Now" : "Not Available"}
+                onClick={() => router.push('/spa-services')}
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+              >
+                Go Back
                               </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </TabsContent>
-              </Tabs>
             </div>
           </div>
-
-          {/* Booking Information */}
-          <div className="w-full md:w-1/3">
-            <Card>
-              <CardHeader>
-                <CardTitle>Booking Information</CardTitle>
-                <CardDescription>Book your spa treatment</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-md text-purple-800 dark:text-purple-400 text-sm flex items-start">
-                  <Info className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+        ) : spa ? (
+          <div>
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold mb-2">{spa.name}</h1>
+              <div className="flex items-center mb-4">
+                <MapPin className="h-4 w-4 mr-1 text-muted-foreground" />
+                <span className="text-muted-foreground">{spa.location}</span>
+              </div>
+              <p className="text-gray-600 mb-4">{spa.description}</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="flex items-center p-3 bg-gray-50 rounded-lg">
+                  <Clock className="h-5 w-5 mr-2 text-primary" />
                   <div>
-                    <p className="font-medium">Booking Policy</p>
-                    <p>
-                      Please arrive 15 minutes before your appointment. Cancellations must be made at least 24 hours in
-                      advance.
+                    <p className="text-sm font-medium">Opening Hours</p>
+                    <p className="text-sm text-gray-600">
+                      Mon-Fri: {spa.opening_hours.monday.start} - {spa.opening_hours.monday.end}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Sat-Sun: {spa.opening_hours.saturday.start} - {spa.opening_hours.saturday.end}
                     </p>
                   </div>
                 </div>
 
-                <div>
-                  <h3 className="font-medium mb-2">Special Packages</h3>
-                  <div className="space-y-3">
-                    <div className="p-3 border rounded-md">
-                      <h4 className="font-medium">Couple's Retreat</h4>
-                      <p className="text-sm text-gray-600 mb-1">
-                        Enjoy a 60-minute massage for two, followed by a private jacuzzi session.
-                      </p>
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">$250</span>
-                        <Button size="sm" variant="outline">
-                          Book Package
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="p-3 border rounded-md">
-                      <h4 className="font-medium">Ultimate Relaxation</h4>
-                      <p className="text-sm text-gray-600 mb-1">Full body massage, facial, and body scrub (3 hours).</p>
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">$320</span>
-                        <Button size="sm" variant="outline">
-                          Book Package
-                        </Button>
-                      </div>
+                {spa.capacity && (
+                  <div className="flex items-center p-3 bg-gray-50 rounded-lg">
+                    <Users className="h-5 w-5 mr-2 text-primary" />
+                    <div>
+                      <p className="text-sm font-medium">Capacity</p>
+                      <p className="text-sm text-gray-600">{spa.capacity} people</p>
                     </div>
                   </div>
+                )}
+                
+                {spa.amenities && spa.amenities.length > 0 && (
+                  <div className="flex items-center p-3 bg-gray-50 rounded-lg">
+                    <BadgeCheck className="h-5 w-5 mr-2 text-primary" />
+                <div>
+                      <p className="text-sm font-medium">Amenities</p>
+                      <p className="text-sm text-gray-600">
+                        {spa.amenities.slice(0, 3).join(", ")}
+                        {spa.amenities.length > 3 && `... +${spa.amenities.length - 3} more`}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <h2 className="text-2xl font-bold mb-4">Available Services</h2>
+            {services.length === 0 ? (
+              <p className="text-center py-8 text-gray-500">No services available at this spa.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {services.map((service) => (
+                  <Card key={service.id} className="hover:shadow-md transition-shadow">
+                    <CardHeader className="pb-2">
+                      <div className="flex justify-between items-start">
+                        <CardTitle className="mr-2">{service.name}</CardTitle>
+                        <Badge className={getServiceStatusColor(service.status)}>
+                          {service.status}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{service.description}</p>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center text-sm">
+                          <DollarSign className="h-4 w-4 mr-2 text-muted-foreground" />
+                          <span>{formatPrice(service.price, service.currency)}</span>
+                    </div>
+                        
+                        {service.duration && (
+                          <div className="flex items-center text-sm">
+                            <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
+                            <span>{service.duration} minutes</span>
+                  </div>
+                        )}
                 </div>
               </CardContent>
+                    
+                    <CardFooter>
+                      <Button 
+                        className="w-full"
+                        disabled={service.status !== 'available'}
+                        onClick={() => {
+                          setSelectedService(service)
+                          setIsBookingDialogOpen(true)
+                        }}
+                      >
+                        Book Now
+                      </Button>
+                    </CardFooter>
             </Card>
+                ))}
+              </div>
+            )}
           </div>
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-lg mb-4">Spa not found</p>
+            <Button 
+              variant="outline" 
+              onClick={() => router.push("/spa-services")}
+            >
+              View All Spas
+            </Button>
         </div>
-      </div>
+        )}
+      </main>
 
       {/* Booking Dialog */}
       <Dialog open={isBookingDialogOpen} onOpenChange={setIsBookingDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Book Treatment</DialogTitle>
+            <DialogTitle>Book Appointment</DialogTitle>
             <DialogDescription>
-              {selectedTreatment && `Book ${selectedTreatment.name} (${selectedTreatment.duration} min)`}
+              Select a date for your spa appointment.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="booking-date">Select Date</Label>
-              <div className="mt-1">
-                <input
-                  type="date"
-                  id="booking-date"
-                  className="w-full rounded-md border border-gray-300 p-2"
-                  onChange={(e) => setSelectedDate(new Date(e.target.value))}
-                  min={new Date().toISOString().split("T")[0]}
-                />
-              </div>
+          {selectedService && (
+            <div className="py-4">
+              <div className="mb-4">
+                <h3 className="font-medium">{selectedService.name}</h3>
+                <p className="text-sm text-muted-foreground">{selectedService.duration} minutes - {formatPrice(selectedService.price, selectedService.currency)}</p>
             </div>
 
+              <div className="space-y-4">
             <div>
-              <Label htmlFor="booking-time">Select Time</Label>
-              <div className="mt-1">
-                <select
-                  id="booking-time"
-                  className="w-full rounded-md border border-gray-300 p-2"
-                  value={selectedTime}
-                  onChange={(e) => setSelectedTime(e.target.value)}
-                >
-                  <option value="">Select a time</option>
-                  {timeSlots.map((time) => (
-                    <option key={time} value={time}>
-                      {time}
-                    </option>
-                  ))}
-                </select>
+                  <h4 className="text-sm font-medium mb-2">Select Date</h4>
+                  <CalendarComponent
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={setSelectedDate}
+                    disabled={(date) => date < new Date() || date > new Date(new Date().setMonth(new Date().getMonth() + 3))}
+                    className="border rounded-md p-2"
+                  />
+                </div>
               </div>
-            </div>
-
-            <div className="bg-gray-50 p-3 rounded-md">
-              <h4 className="font-medium mb-2">Booking Summary</h4>
-              {selectedTreatment && (
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span>Treatment:</span>
-                    <span>{selectedTreatment.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Duration:</span>
-                    <span>{selectedTreatment.duration} minutes</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Price:</span>
-                    <span>${selectedTreatment.price}</span>
-                  </div>
-                  {selectedDate && selectedTime && (
-                    <div className="flex justify-between">
-                      <span>Appointment:</span>
-                      <span>
-                        {formatDate(selectedDate)} at {selectedTime}
-                      </span>
-                    </div>
-                  )}
                 </div>
               )}
-            </div>
-          </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsBookingDialogOpen(false)}>
               Cancel
             </Button>
-            <Button className="bg-purple-600 hover:bg-purple-700" onClick={confirmBooking} disabled={!selectedTime}>
-              Confirm Booking
+            <Button 
+              disabled={!selectedDate || processingPayment} 
+              onClick={handleBooking}
+            >
+              {processingPayment ? "Processing..." : "Proceed to Payment"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Booking Confirmation */}
-      {bookingConfirmed && (
-        <Dialog open={bookingConfirmed} onOpenChange={setBookingConfirmed}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <div className="mx-auto w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-green-600 mb-4">
-                <Check className="h-6 w-6" />
-              </div>
-              <DialogTitle className="text-center">Booking Confirmed!</DialogTitle>
-              <DialogDescription className="text-center">
-                Your spa treatment has been booked successfully.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="bg-gray-50 p-4 rounded-md">
-              <h4 className="font-medium mb-2">Booking Details</h4>
-              {selectedTreatment && (
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span>Treatment:</span>
-                    <span>{selectedTreatment.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Duration:</span>
-                    <span>{selectedTreatment.duration} minutes</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Price:</span>
-                    <span>${selectedTreatment.price}</span>
-                  </div>
-                  {selectedDate && selectedTime && (
-                    <div className="flex justify-between">
-                      <span>Appointment:</span>
-                      <span>
-                        {formatDate(selectedDate)} at {selectedTime}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span>Booking ID:</span>
-                    <span>
-                      SPA-
-                      {Math.floor(Math.random() * 10000)
-                        .toString()
-                        .padStart(4, "0")}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="text-center text-sm text-gray-500 mt-2">Redirecting to your bookings page...</div>
-          </DialogContent>
-        </Dialog>
-      )}
 
       <Navigation />
     </div>

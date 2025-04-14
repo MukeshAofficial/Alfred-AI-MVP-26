@@ -35,7 +35,7 @@ export default function BookingsPage() {
     setError(null)
     try {
       const bookingsDB = new BookingsDB()
-      const data = await bookingsDB.getUserBookings(userId)
+      const data = await bookingsDB.getAllUserBookings(userId)
       setBookings(data)
     } catch (err: any) {
       console.error("Error fetching bookings:", err)

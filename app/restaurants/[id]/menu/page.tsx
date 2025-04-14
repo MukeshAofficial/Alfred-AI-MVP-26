@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import Header from "@/components/header"
 import Navigation from "@/components/navigation"
+import React from "react"
 
 // Mock restaurant data
 const restaurantData = {
@@ -187,7 +188,10 @@ const restaurantData = {
 export default function RestaurantMenuPage() {
   const params = useParams()
   const router = useRouter()
-  const restaurantId = params.id as string
+  
+  // Unwrap params using React.use()
+  const unwrappedParams = React.use(params)
+  const restaurantId = unwrappedParams.id as string
   const [restaurant, setRestaurant] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)

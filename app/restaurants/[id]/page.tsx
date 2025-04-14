@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Calendar, ArrowLeft, Star, MapPin, Menu, UtensilsCrossed } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -49,7 +49,11 @@ const restaurantData = {
 export default function RestaurantDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const restaurantId = params.id as string
+  
+  // Unwrap params using React.use()
+  const unwrappedParams = React.use(params)
+  const restaurantId = unwrappedParams.id as string
+  
   const [restaurant, setRestaurant] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
