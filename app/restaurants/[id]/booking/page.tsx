@@ -1,19 +1,19 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { Calendar, Clock, Users, ArrowLeft, Check } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import Header from "@/components/header"
-import Navigation from "@/components/navigation"
-import { useMobile } from "@/hooks/use-mobile"
-import { cn } from "@/lib/utils"
-import React from "react"
+import { Suspense, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { Calendar, Clock, Users, ArrowLeft, Check } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import Header from "@/components/header";
+import Navigation from "@/components/navigation";
+import { useMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
+import { Loader2 } from "lucide-react";
 
 // Mock restaurant data
 const restaurantData = {
@@ -56,7 +56,7 @@ const restaurantData = {
       { id: 6, name: "Table 6", seats: 6, status: "booked" },
     ],
   },
-}
+};
 
 // Time slots for booking
 const timeSlots = [
@@ -80,59 +80,63 @@ const timeSlots = [
   "8:30 PM",
   "9:00 PM",
   "9:30 PM",
-]
+];
 
-export default function RestaurantBookingPage() {
-  const params = useParams()
-  const router = useRouter()
-  
-  // Unwrap params using React.use() with proper typing
-  const unwrappedParams = React.use(params as unknown as any) as { id: string }
-  const restaurantId = unwrappedParams.id as string
-  const [restaurant, setRestaurant] = useState(restaurantData[restaurantId])
-  const [selectedDate, setSelectedDate] = useState("")
-  const [selectedTime, setSelectedTime] = useState("")
-  const [selectedGuests, setSelectedGuests] = useState("2")
-  const [selectedTable, setSelectedTable] = useState<string | null>(null)
-  const [specialRequests, setSpecialRequests] = useState("")
-  const [currentStep, setCurrentStep] = useState(1)
-  const [bookingConfirmed, setBookingConfirmed] = useState(false)
-  const isMobile = useMobile()
+// Fallback component for Suspense
+function BookingContentFallback() {
+  return (
+    <div className="flex justify-center items-center py-12">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
+}
+
+// Main booking content component
+function BookingContent() {
+  const params = useParams();
+  const router = useRouter();
+  const restaurantId = params.id as string;
+  const [restaurant, setRestaurant] = useState(restaurantData[restaurantId]);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedTime, setSelectedTime] = useState("");
+  const [selectedGuests, setSelectedGuests] = useState("2");
+  const [selectedTable, setSelectedTable] = useState<string | null>(null);
+  const [specialRequests, setSpecialRequests] = useState("");
+  const [currentStep, setCurrentStep] = useState(1);
+  const [bookingConfirmed, setBookingConfirmed] = useState(false);
+  const isMobile = useMobile();
 
   // Filter tables based on guest count
   const filteredTables =
     restaurant?.tables.filter(
       (table) => table.seats >= Number.parseInt(selectedGuests) && table.status === "available",
-    ) || []
+    ) || [];
 
   const handleNextStep = () => {
-    setCurrentStep(currentStep + 1)
-  }
+    setCurrentStep(currentStep + 1);
+  };
 
   const handlePreviousStep = () => {
-    setCurrentStep(currentStep - 1)
-  }
+    setCurrentStep(currentStep - 1);
+  };
 
   const handleConfirmBooking = () => {
-    // In a real app, this would send the booking to an API
-    setBookingConfirmed(true)
-
-    // After a delay, redirect to the bookings page
+    setBookingConfirmed(true);
     setTimeout(() => {
-      router.push("/bookings")
-    }, 3000)
-  }
+      router.push("/bookings");
+    }, 3000);
+  };
 
   // Format date for display
-  const formatDate = (dateString) => {
-    if (!dateString) return ""
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "";
     return new Intl.DateTimeFormat("en-US", {
       weekday: "long",
       year: "numeric",
       month: "long",
       day: "numeric",
-    }).format(new Date(dateString))
-  }
+    }).format(new Date(dateString));
+  };
 
   if (!restaurant) {
     return (
@@ -149,13 +153,12 @@ export default function RestaurantBookingPage() {
         </div>
         <Navigation />
       </div>
-    )
+    );
   }
 
   return (
     <div className="flex flex-col min-h-screen">
       <Header title="Restaurant Booking" />
-
       <div className={cn("container mx-auto px-4 py-6 flex-1", isMobile ? "pb-20" : "")}>
         <div className="flex items-center mb-6">
           <Button variant="ghost" size="sm" onClick={() => router.back()} className="mr-2">
@@ -207,7 +210,6 @@ export default function RestaurantBookingPage() {
                     </div>
                   </div>
                 </div>
-
                 <p className="text-center text-sm text-gray-500">Redirecting to your bookings...</p>
               </div>
             </CardContent>
@@ -370,4 +372,97 @@ export default function RestaurantBookingPage() {
                                 className="peer sr-only"
                               />
                               <Label
-                                htmlFor={`table-${table.id}`
+                                htmlFor={`table-${table.id}`}
+                                className="flex items-center justify-between p-4 border rounded-lg cursor-pointer peer-checked:border-primary peer-checked:bg-primary/10"
+                              >
+                                <div>
+                                  <p className="font-medium">{table.name}</p>
+                                  <p className="text-sm text-gray-500">Seats: {table.seats}</p>
+                                </div>
+                                <div className="text-sm text-gray-500">Available</div>
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      </RadioGroup>
+                    ) : (
+                      <p className="text-gray-500">No tables available for the selected party size.</p>
+                    )}
+                  </div>
+                </CardContent>
+                <CardFooter className="flex justify-between">
+                  <Button variant="outline" onClick={handlePreviousStep}>
+                    Back
+                  </Button>
+                  <Button onClick={handleNextStep} disabled={!selectedTable}>
+                    Next: Confirm Booking
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
+
+            {currentStep === 3 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Confirm Your Booking</CardTitle>
+                  <CardDescription>Review your reservation details</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="border-t border-b py-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-gray-500">Restaurant</p>
+                          <p className="font-medium">{restaurant.name}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Table</p>
+                          <p className="font-medium">
+                            {restaurant.tables.find((t) => t.id.toString() === selectedTable)?.name || ""}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Date</p>
+                          <p className="font-medium">{formatDate(selectedDate)}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Time</p>
+                          <p className="font-medium">{selectedTime}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Guests</p>
+                          <p className="font-medium">{selectedGuests} people</p>
+                        </div>
+                        {specialRequests && (
+                          <div>
+                            <p className="text-sm text-gray-500">Special Requests</p>
+                            <p className="font-medium">{specialRequests}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter className="flex justify-between">
+                  <Button variant="outline" onClick={handlePreviousStep}>
+                    Back
+                  </Button>
+                  <Button onClick={handleConfirmBooking}>Confirm Booking</Button>
+                </CardFooter>
+              </Card>
+            )}
+          </div>
+        )}
+      </div>
+      <Navigation />
+    </div>
+  );
+}
+
+export default function RestaurantBookingPage() {
+  return (
+    <Suspense fallback={<BookingContentFallback />}>
+      <BookingContent />
+    </Suspense>
+  );
+}
