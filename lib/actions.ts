@@ -40,16 +40,37 @@ export async function createCheckoutSession({
     const supabase = createServerSupabaseClient()
     const spaDB = SpaDB.getInstance()
 
-    // Get service details
-    const service = await spaDB.getSpaServiceById(serviceId)
-    if (!service) {
-      throw new Error(`Service with ID ${serviceId} not found`)
-    }
+    // First, determine if this is a spa service or a regular service
+    let isRegularService = false;
+    let service, spa;
 
-    // Get spa details
-    const spa = await spaDB.getSpaById(service.spa_id)
-    if (!spa) {
-      throw new Error(`Spa with ID ${service.spa_id} not found`)
+    // Try to get service as a spa service first
+    service = await spaDB.getSpaServiceById(serviceId)
+
+    if (!service) {
+      // If it's not a spa service, try to get it as a regular service
+      console.log(`No spa service found with ID ${serviceId}, checking regular services`)
+      const { data: regularService, error } = await supabase
+        .from('services')
+        .select('*')
+        .eq('id', serviceId)
+        .single();
+
+      if (error || !regularService) {
+        throw new Error(`Service with ID ${serviceId} not found`)
+      }
+
+      service = regularService;
+      isRegularService = true;
+
+      // For regular services, we don't need spa details
+      spa = { id: 'regular-service', name: regularService.business_name || 'Service Provider' };
+    } else {
+      // For spa services, get the associated spa details
+      spa = await spaDB.getSpaById(service.spa_id)
+      if (!spa) {
+        throw new Error(`Spa with ID ${service.spa_id} not found`)
+      }
     }
 
     // Get customer info if userId is provided
@@ -86,8 +107,9 @@ export async function createCheckoutSession({
     successUrl.searchParams.append('serviceId', serviceId)
     successUrl.searchParams.append('bookingDate', formattedBookingDate)
     if (userId) successUrl.searchParams.append('userId', userId)
+    successUrl.searchParams.append('type', isRegularService ? 'service' : 'spa')
 
-    console.log(`Creating Stripe checkout session for service: ${serviceId}, user: ${customerId}, date: ${formattedBookingDate}, spa: ${spa.id}`);
+    console.log(`Creating Stripe checkout session for ${isRegularService ? 'regular service' : 'spa service'}: ${serviceId}, user: ${customerId}, date: ${formattedBookingDate}${!isRegularService ? ', spa: ' + spa.id : ''}`);
 
     // Create a Stripe checkout session
     const stripeSession = await stripe.checkout.sessions.create({
@@ -108,7 +130,7 @@ export async function createCheckoutSession({
       ],
       mode: 'payment',
       success_url: successUrl.toString(),
-      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/spa-services?canceled=true`,
+      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/${isRegularService ? 'services' : 'spa-services'}?canceled=true`,
       customer_email: customerEmail,
       metadata: {
         serviceId: service.id,
@@ -116,8 +138,9 @@ export async function createCheckoutSession({
         serviceName: service.name,
         userFullName: userDetails?.full_name || '',
         bookingDate: formattedBookingDate,
-        spaId: spa.id,
-        spaName: spa.name,
+        serviceType: isRegularService ? 'regular' : 'spa',
+        spaId: isRegularService ? null : spa.id,
+        spaName: isRegularService ? null : spa.name,
         servicePrice: service.price.toString(),
         serviceCurrency: service.currency || 'usd'
       },
