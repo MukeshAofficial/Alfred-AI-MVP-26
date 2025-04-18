@@ -79,7 +79,7 @@ export async function createRestaurantCheckoutSession({
 
     // Set success URL with query parameters for post-purchase page
     const successUrl = new URL(
-      `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/restaurant-booking-success`
+      `${process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-buttler.vercel.app'}/restaurant-booking-success`
     )
     successUrl.searchParams.append('restaurantId', restaurantId)
     successUrl.searchParams.append('bookingDate', formattedBookingDate)
@@ -108,7 +108,7 @@ export async function createRestaurantCheckoutSession({
       ],
       mode: 'payment',
       success_url: successUrl.toString(),
-      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/restaurants?canceled=true`,
+      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-buttler.vercel.app'}/restaurants?canceled=true`,
       customer_email: customerEmail,
       metadata: {
         bookingType: 'restaurant',

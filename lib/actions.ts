@@ -102,7 +102,7 @@ export async function createCheckoutSession({
 
     // Set success URL with query parameters for post-purchase page
     const successUrl = new URL(
-      `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/booking-success`
+      `${process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-buttler.vercel.app'}/booking-success`
     )
     successUrl.searchParams.append('serviceId', serviceId)
     successUrl.searchParams.append('bookingDate', formattedBookingDate)
@@ -130,7 +130,7 @@ export async function createCheckoutSession({
       ],
       mode: 'payment',
       success_url: successUrl.toString(),
-      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/${isRegularService ? 'services' : 'spa-services'}?canceled=true`,
+      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'https://ai-buttler.vercel.app'}/${isRegularService ? 'services' : 'spa-services'}?canceled=true`,
       customer_email: customerEmail,
       metadata: {
         serviceId: service.id,
