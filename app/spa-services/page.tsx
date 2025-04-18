@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Search, Filter, MapPin, Star, Clock, DollarSign, Calendar, Users, ArrowRight, BadgeCheck, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,9 +20,25 @@ import { AdminSpa, AdminSpaService } from "@/types/spa"
 import { createCheckoutSession } from "@/lib/actions"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Label } from "@/components/ui/label"
+import { CalendarIcon } from "lucide-react"
+import ServiceCard from "@/components/ServiceCard"
+
+// Define service categories
+const SERVICE_CATEGORIES = [
+  "All Categories",
+  "Massage",
+  "Body Rituals",
+  "Facials",
+  "Hand & Foot Treatments",
+  "Waxing",
+  "Other"
+];
 
 export default function SpaServicesPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { profile } = useAuth()
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
@@ -31,23 +47,27 @@ export default function SpaServicesPage() {
   const [activeTab, setActiveTab] = useState("spas")
   const [selectedSpa, setSelectedSpa] = useState<AdminSpa | null>(null)
   const [selectedService, setSelectedService] = useState<AdminSpaService | null>(null)
-  const [searchTerm, setSearchTerm] = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [bookingDate, setBookingDate] = useState<string>(getTomorrowDate())
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date(getTomorrowDate()))
   const [isBooking, setIsBooking] = useState(false)
   const [showBookingDialog, setShowBookingDialog] = useState(false)
   const [dbSetupError, setDbSetupError] = useState<string | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState("All Categories")
   
-  // Get tomorrow's date formatted as YYYY-MM-DD for the default booking date
-  function getTomorrowDate() {
-    const tomorrow = new Date()
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    return tomorrow.toISOString().split('T')[0]
-  }
+  // Booking state
+  const [serviceToBook, setServiceToBook] = useState<AdminSpaService | null>(null)
+  const [isBookingLoading, setIsBookingLoading] = useState(false)
   
   useEffect(() => {
     fetchSpas()
+    
+    // Check for canceled payment
+    const canceled = searchParams.get('canceled')
+    if (canceled) {
+      console.log('Payment was canceled')
+    }
   }, [])
   
   useEffect(() => {
@@ -117,6 +137,22 @@ export default function SpaServicesPage() {
     try {
       const spaDB = SpaDB.getInstance()
       const servicesData = await spaDB.getSpaServicesBySpaId(spaId)
+      
+      // Debug output for services loaded
+      servicesData.forEach(service => {
+        console.log(`Loaded service: ${service.name}`);
+        console.log(`  Special requirements: ${service.special_requirements || 'none'}`);
+        
+        // Try to extract category
+        let serviceCategory = "Other";
+        if (service.special_requirements && service.special_requirements.includes("Category:")) {
+          const match = service.special_requirements.match(/Category:\s*([^\n]+)/);
+          if (match && match[1]) {
+            serviceCategory = match[1].trim();
+          }
+        }
+        console.log(`  Detected category: ${serviceCategory}`);
+      });
       
       // Filter only available services
       const availableServices = servicesData.filter(service => service.status === 'available')
@@ -210,21 +246,35 @@ export default function SpaServicesPage() {
   const filteredSpas = spas.filter((spa) => {
     // Filter by search term
     const matchesSearch =
-      spa.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      spa.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      spa.location.toLowerCase().includes(searchTerm.toLowerCase())
+      spa.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      spa.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      spa.location.toLowerCase().includes(searchQuery.toLowerCase())
 
     return matchesSearch
   })
   
   const filteredServices = services.filter((service) => {
-    // Filter by search term
-    const matchesSearch =
-      service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      service.description.toLowerCase().includes(searchTerm.toLowerCase())
-
-    return matchesSearch
-  })
+    // Match search query
+    const matchesSearch = 
+      service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      service.description.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    // Match category
+    let serviceCategory = "Other";
+    if (service.special_requirements && service.special_requirements.includes("Category:")) {
+      const match = service.special_requirements.match(/Category:\s*([^\n]+)/);
+      if (match && match[1]) {
+        serviceCategory = match[1].trim();
+      }
+    }
+    
+    // Debug output to help diagnose category issues
+    console.log(`Service: ${service.name}, Category: ${serviceCategory}, Selected: ${selectedCategory}`);
+    
+    const matchesCategory = selectedCategory === "All Categories" || serviceCategory === selectedCategory;
+    
+    return matchesSearch && matchesCategory;
+  });
 
   // Function to get price range based on the average price of services
   const getSpaPrice = (spa: AdminSpa) => {
@@ -239,6 +289,46 @@ export default function SpaServicesPage() {
       style: 'currency',
       currency: currency,
     }).format(price)
+  }
+
+  // Extract categories from services
+  const getCategories = (): string[] => {
+    const categories = new Set<string>();
+    services.forEach(service => {
+      let category = "Other";
+      if (service.special_requirements && service.special_requirements.includes("Category:")) {
+        const match = service.special_requirements.match(/Category:\s*([^\n]+)/);
+        if (match && match[1]) {
+          category = match[1].trim();
+        }
+      }
+      categories.add(category);
+    });
+    return ["All Categories", ...Array.from(categories)];
+  }
+  
+  // Group services by category
+  const groupedServices = filteredServices.reduce((acc, service) => {
+    let category = "Other";
+    if (service.special_requirements && service.special_requirements.includes("Category:")) {
+      const match = service.special_requirements.match(/Category:\s*([^\n]+)/);
+      if (match && match[1]) {
+        category = match[1].trim();
+      }
+    }
+    
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push(service);
+    return acc;
+  }, {} as Record<string, AdminSpaService[]>);
+
+  // Get tomorrow's date formatted as YYYY-MM-DD for the default booking date
+  function getTomorrowDate() {
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    return tomorrow.toISOString().split('T')[0]
   }
 
   return (
@@ -258,8 +348,8 @@ export default function SpaServicesPage() {
               <Input
                 placeholder="Search spas or services..."
                 className="pl-10"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
           </div>
@@ -355,7 +445,7 @@ export default function SpaServicesPage() {
                   <Button
                     variant="outline"
                     onClick={() => {
-                      setSearchTerm("")
+                      setSearchQuery("")
                     }}
                   >
                     Clear Filters
@@ -376,7 +466,24 @@ export default function SpaServicesPage() {
                     Select a service below to book your treatment
                   </p>
                 </div>
-                
+
+                {/* Add Category Filter Tabs */}
+                <div className="mb-6">
+                  <Tabs defaultValue="All Categories" value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <TabsList className="mb-4 flex flex-wrap">
+                      {SERVICE_CATEGORIES.map((category) => (
+                        <TabsTrigger 
+                          key={category} 
+                          value={category}
+                          className={selectedCategory === category ? "bg-purple-100 text-purple-800" : ""}
+                        >
+                          {category}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                  </Tabs>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {loading ? (
                     // Skeleton loading state for services
@@ -394,52 +501,16 @@ export default function SpaServicesPage() {
                     ))
                   ) : filteredServices.length > 0 ? (
                     filteredServices.map((service) => (
-                      <Card key={service.id} className="overflow-hidden">
-                        <CardHeader>
-                          <div className="flex justify-between items-start">
-                            <CardTitle>{service.name}</CardTitle>
-                            <div className="text-lg font-bold text-purple-600">
-                              {formatPrice(service.price, service.currency)}
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          <p className="text-sm text-gray-600 mb-4">{service.description}</p>
-                          
-                          <div className="flex flex-col space-y-2">
-                            <div className="flex items-center text-sm">
-                              <Clock className="h-4 w-4 mr-2 text-gray-500" />
-                              <span>{service.duration} minutes</span>
-                            </div>
-                            
-                            {service.therapists && service.therapists.length > 0 && (
-                              <div className="flex items-center text-sm">
-                                <Users className="h-4 w-4 mr-2 text-gray-500" />
-                                <span>
-                                  {service.therapists.length} {service.therapists.length === 1 ? 'therapist' : 'therapists'} available
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </CardContent>
-                        <CardFooter className="border-t pt-4">
-                          <Button 
-                            className="w-full" 
-                            onClick={() => handleBookService(service.id)}
-                          >
-                            Book Now
-                          </Button>
-                        </CardFooter>
-                      </Card>
+                      <ServiceCard key={service.id} service={service} />
                     ))
                   ) : (
                     <div className="col-span-full text-center py-12">
-                      <p className="text-gray-500 mb-4">No services available for this spa at the moment.</p>
+                      <p className="text-gray-500 mb-4">No services available for this category at the moment.</p>
                       <Button
                         variant="outline"
-                        onClick={() => setActiveTab("spas")}
+                        onClick={() => setSelectedCategory("All Categories")}
                       >
-                        Choose Another Spa
+                        View All Services
                       </Button>
                     </div>
                   )}

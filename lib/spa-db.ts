@@ -6,11 +6,19 @@ export class SpaDB {
   private static instance: SpaDB;
 
   constructor() {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("Missing Supabase environment variables. Check your .env file.");
+      throw new Error("Database configuration is incomplete. Missing environment variables for Supabase.");
+    }
+
     try {
       this.supabase = createClientComponentClient();
     } catch (error) {
-      console.error("Failed to initialize Supabase client:", error);
-      throw new Error("Database connection failed. Please try again later.");
+      console.error("Failed to create Supabase client:", error);
+      throw new Error("Failed to initialize database connection.");
     }
   }
 
@@ -30,23 +38,44 @@ export class SpaDB {
     bookingsExist: boolean
   }> {
     try {
-      // Try to query one row from each required table
-      const { error: spasError } = await this.supabase
+      // Check if supabase is properly initialized
+      if (!this.supabase) {
+        console.error('Supabase client not initialized');
+        throw new Error('Database client not initialized');
+      }
+
+      // In client-side component, direct access to information_schema might not be available
+      // Try to query directly against our expected tables instead
+      
+      // Try to query from admin_spas
+      const { data: spasData, error: spasError } = await this.supabase
         .from('admin_spas')
         .select('id')
         .limit(1);
         
-      const { error: servicesError } = await this.supabase
+      // Try to query from admin_spa_services  
+      const { data: servicesData, error: servicesError } = await this.supabase
         .from('admin_spa_services')
         .select('id')
         .limit(1);
         
-      const { error: bookingsError } = await this.supabase
+      // Try to query from admin_spa_bookings  
+      const { data: bookingsData, error: bookingsError } = await this.supabase
         .from('admin_spa_bookings')
         .select('id')
         .limit(1);
       
-      // Check for table not found errors
+      // Log detailed error information
+      console.log('Spa table check results:', {
+        spasData: spasData ? 'exists' : 'empty',
+        servicesData: servicesData ? 'exists' : 'empty',
+        bookingsData: bookingsData ? 'exists' : 'empty',
+        spasError: spasError ? { code: spasError.code, message: spasError.message } : null,
+        servicesError: servicesError ? { code: servicesError.code, message: servicesError.message } : null,
+        bookingsError: bookingsError ? { code: bookingsError.code, message: bookingsError.message } : null
+      });
+      
+      // Check for table not found errors (PGRST116)
       const spasExist = !(spasError && spasError.code === "PGRST116");
       const servicesExist = !(servicesError && servicesError.code === "PGRST116");
       const bookingsExist = !(bookingsError && bookingsError.code === "PGRST116");
@@ -61,13 +90,11 @@ export class SpaDB {
         bookingsExist
       };
     } catch (error) {
-      console.error("Error checking tables:", error);
-      return {
-        allExist: false,
-        spasExist: false,
-        servicesExist: false,
-        bookingsExist: false
-      };
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error checking tables';
+      console.error('Error checking spa tables existence:', errorMessage);
+      
+      // Provide a more helpful error for debugging
+      throw new Error(`Failed to check spa database tables: ${errorMessage}`);
     }
   }
 

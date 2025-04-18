@@ -402,7 +402,7 @@ export class BookingsDB {
     }
   }
 
-  // Get all bookings for a user including spa bookings
+  // Get all bookings for a user including spa bookings and restaurant bookings
   async getAllUserBookings(userId: string) {
     try {
       if (!userId) {
@@ -410,18 +410,21 @@ export class BookingsDB {
         return [];
       }
 
-      console.log(`Fetching all bookings for user: ${userId} (including spa bookings)`);
+      console.log(`Fetching all bookings for user: ${userId} (including spa and restaurant bookings)`);
       
-      // Get normal bookings
+      // Get regular bookings
       const regularBookings = await this.getUserBookings(userId);
       
       // Get spa bookings
       const spaBookings = await this.getUserSpaBookings(userId);
       
-      console.log(`Found ${regularBookings.length} regular bookings and ${spaBookings.length} spa bookings`);
+      // Get restaurant bookings
+      const restaurantBookings = await this.getUserRestaurantBookings(userId);
       
-      // Combine them
-      return [...regularBookings, ...spaBookings];
+      console.log(`Found ${regularBookings.length} regular bookings, ${spaBookings.length} spa bookings, and ${restaurantBookings.length} restaurant bookings.`);
+      
+      // Combine all bookings
+      return [...regularBookings, ...spaBookings, ...restaurantBookings];
     } catch (error) {
       console.error("Error fetching all user bookings:", error);
       return [];
@@ -572,6 +575,94 @@ export class BookingsDB {
           spa_name: spa.name || "Spa",
           time: booking.booking_date ? new Date(booking.booking_date).toLocaleTimeString() : "Not specified",
           duration: service.duration ? `${service.duration} minutes` : "Not specified"
+        }
+      };
+    });
+  }
+
+  // Get restaurant bookings for a user
+  async getUserRestaurantBookings(userId: string): Promise<BookingData[]> {
+    try {
+      if (!userId) {
+        console.error("getUserRestaurantBookings called with empty userId");
+        return [];
+      }
+
+      console.log(`Fetching restaurant bookings for user: ${userId}`);
+      
+      // Check if admin_restaurant_bookings table exists
+      const { data: tablesExist, error: tableCheckError } = await this.supabase
+        .from('information_schema.tables')
+        .select('table_name')
+        .eq('table_name', 'admin_restaurant_bookings')
+        .eq('table_schema', 'public')
+        .maybeSingle();
+      
+      if (tableCheckError || !tablesExist) {
+        console.log('admin_restaurant_bookings table does not exist.');
+        return [];
+      }
+      
+      // Fetch restaurant bookings
+      const { data: restaurantBookings, error } = await this.supabase
+        .from('admin_restaurant_bookings')
+        .select(`
+          *,
+          restaurant:admin_restaurants(id, name, description, location, images, cuisine_type, price_range)
+        `)
+        .eq('guest_id', userId)
+        .order('booking_date', { ascending: false });
+        
+      if (error) {
+        console.error('Error fetching restaurant bookings:', error);
+        return [];
+      }
+      
+      // Transform restaurant bookings to BookingData format
+      const transformedBookings = this.transformRestaurantBookingsToBookingData(restaurantBookings || []);
+      
+      console.log(`Found ${transformedBookings.length} restaurant bookings for user ${userId}`);
+      return transformedBookings;
+    } catch (error) {
+      console.error('Error in getUserRestaurantBookings:', error);
+      return [];
+    }
+  }
+  
+  // Transform restaurant bookings to BookingData format
+  private transformRestaurantBookingsToBookingData(bookings: any[]): BookingData[] {
+    return bookings.map(booking => {
+      return {
+        id: booking.id,
+        service_id: booking.restaurant?.id || booking.restaurant_id,
+        user_id: booking.guest_id,
+        status: booking.status,
+        payment_status: booking.payment_status,
+        payment_intent: booking.payment_intent,
+        amount_paid: booking.amount_paid,
+        currency: booking.currency,
+        booking_date: booking.booking_date,
+        created_at: booking.created_at,
+        updated_at: booking.updated_at,
+        
+        // Service info
+        service_name: booking.restaurant?.name || 'Restaurant Booking',
+        service_description: booking.restaurant?.description || `Table for ${booking.party_size} people`,
+        service_price: booking.amount_paid,
+        service_currency: booking.currency,
+        service_category: 'Restaurant',
+        service_location: booking.restaurant?.location,
+        service_images: booking.restaurant?.images,
+        
+        // Additional restaurant fields
+        metadata: {
+          booking_type: 'restaurant',
+          restaurant_id: booking.restaurant?.id || booking.restaurant_id,
+          restaurant_name: booking.restaurant?.name,
+          party_size: booking.party_size,
+          table_number: booking.table?.table_number,
+          cuisine_type: booking.restaurant?.cuisine_type,
+          price_range: booking.restaurant?.price_range
         }
       };
     });

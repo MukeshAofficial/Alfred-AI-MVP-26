@@ -92,6 +92,7 @@ export interface SpaServiceFormData {
   therapists?: string[];
   special_requirements?: string;
   images?: string[];
+  category?: string;
 }
 
 export interface SpaBookingFormData {

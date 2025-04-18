@@ -10,6 +10,16 @@ import { SpaServiceFormData } from "@/types/spa"
 import { SpaDB } from "@/lib/spa-db"
 import { useToast } from "@/hooks/use-toast"
 
+// Define service categories
+const SERVICE_CATEGORIES = [
+  "Massage",
+  "Body Rituals",
+  "Facials",
+  "Hand & Foot Treatments",
+  "Waxing",
+  "Other"
+];
+
 interface NewServiceFormProps {
   spaId: string
   onSuccess?: () => void
@@ -29,7 +39,8 @@ export function NewServiceForm({ spaId, onSuccess }: NewServiceFormProps) {
     status: "available",
     therapists: [],
     special_requirements: "",
-    images: []
+    images: [],
+    category: "Massage" // Default category
   })
   
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -66,7 +77,13 @@ export function NewServiceForm({ spaId, onSuccess }: NewServiceFormProps) {
     setIsSubmitting(true)
     
     try {
-      const service = await spaDb.createSpaService(formData)
+      // Add category to special_requirements
+      const serviceData = {
+        ...formData,
+        special_requirements: `Category: ${formData.category}${formData.special_requirements ? '\n' + formData.special_requirements : ''}`
+      };
+      
+      const service = await spaDb.createSpaService(serviceData)
       
       if (service) {
         toast({
@@ -85,7 +102,8 @@ export function NewServiceForm({ spaId, onSuccess }: NewServiceFormProps) {
           status: "available",
           therapists: [],
           special_requirements: "",
-          images: []
+          images: [],
+          category: "Massage"
         })
         
         // Call onSuccess callback if provided
@@ -130,6 +148,25 @@ export function NewServiceForm({ spaId, onSuccess }: NewServiceFormProps) {
           rows={3}
           required
         />
+      </div>
+      
+      <div className="space-y-2">
+        <Label htmlFor="category">Category</Label>
+        <Select
+          value={formData.category}
+          onValueChange={(value) => handleInputChange("category", value)}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select category" />
+          </SelectTrigger>
+          <SelectContent>
+            {SERVICE_CATEGORIES.map((category) => (
+              <SelectItem key={category} value={category}>
+                {category}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       
       <div className="grid grid-cols-2 gap-4">

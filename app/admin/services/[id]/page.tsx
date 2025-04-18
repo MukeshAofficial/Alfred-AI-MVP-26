@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { Clock, MapPin, Users } from "lucide-react"
+import React from "react"
 
 interface Restaurant {
   id: string
@@ -34,6 +35,10 @@ interface Service {
 }
 
 export default function ServiceDetailPage({ params }: { params: { id: string } }) {
+  // Unwrap params using React.use()
+  const unwrappedParams = React.use(params);
+  const serviceId = unwrappedParams.id;
+  
   const [service, setService] = useState<Service | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState<Partial<Service>>({})
@@ -47,7 +52,7 @@ export default function ServiceDetailPage({ params }: { params: { id: string } }
       const { data: serviceData, error: serviceError } = await supabase
         .from('admin_services')
         .select('*')
-        .eq('id', params.id)
+        .eq('id', serviceId)
         .single()
 
       if (serviceError) {
@@ -62,7 +67,7 @@ export default function ServiceDetailPage({ params }: { params: { id: string } }
         const { data: restData, error: restError } = await supabase
           .from('admin_restaurants')
           .select('*')
-          .eq('service_id', params.id)
+          .eq('service_id', serviceId)
           .single()
 
         if (!restError) {
@@ -83,7 +88,7 @@ export default function ServiceDetailPage({ params }: { params: { id: string } }
     }
 
     fetchService()
-  }, [params.id, supabase])
+  }, [serviceId, supabase])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -137,7 +142,7 @@ export default function ServiceDetailPage({ params }: { params: { id: string } }
       const { error: serviceError } = await supabase
         .from('admin_services')
         .update(formData)
-        .eq('id', params.id)
+        .eq('id', serviceId)
 
       if (serviceError) throw serviceError
 
@@ -158,7 +163,7 @@ export default function ServiceDetailPage({ params }: { params: { id: string } }
       const { data: updatedService } = await supabase
         .from('admin_services')
         .select('*')
-        .eq('id', params.id)
+        .eq('id', serviceId)
         .single()
         
       let updatedRestaurantData = null
@@ -166,7 +171,7 @@ export default function ServiceDetailPage({ params }: { params: { id: string } }
         const { data: restData } = await supabase
           .from('admin_restaurants')
           .select('*')
-          .eq('service_id', params.id)
+          .eq('service_id', serviceId)
           .single()
           
         updatedRestaurantData = restData

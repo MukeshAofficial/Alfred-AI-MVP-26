@@ -86,8 +86,8 @@ export default function RestaurantBookingPage() {
   const params = useParams()
   const router = useRouter()
   
-  // Unwrap params using React.use()
-  const unwrappedParams = React.use(params)
+  // Unwrap params using React.use() with proper typing
+  const unwrappedParams = React.use(params as unknown as any) as { id: string }
   const restaurantId = unwrappedParams.id as string
   const [restaurant, setRestaurant] = useState(restaurantData[restaurantId])
   const [selectedDate, setSelectedDate] = useState("")
@@ -370,118 +370,4 @@ export default function RestaurantBookingPage() {
                                 className="peer sr-only"
                               />
                               <Label
-                                htmlFor={`table-${table.id}`}
-                                className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
-                              >
-                                <div className="mb-2 rounded-full bg-primary/10 p-2">
-                                  <Users className="h-6 w-6 text-primary" />
-                                </div>
-                                <div className="text-center">
-                                  <div className="font-medium">{table.name}</div>
-                                  <div className="text-sm text-muted-foreground">{table.seats} seats</div>
-                                </div>
-                              </Label>
-                            </div>
-                          ))}
-                        </div>
-                      </RadioGroup>
-                    ) : (
-                      <div className="text-center py-8">
-                        <p className="text-red-500 mb-4">No tables available for the selected criteria.</p>
-                        <Button variant="outline" onClick={handlePreviousStep}>
-                          Change Reservation Details
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-                <CardFooter className="flex justify-between">
-                  <Button variant="outline" onClick={handlePreviousStep}>
-                    Back
-                  </Button>
-                  <Button onClick={handleNextStep} disabled={!selectedTable}>
-                    Next: Confirm Booking
-                  </Button>
-                </CardFooter>
-              </Card>
-            )}
-
-            {currentStep === 3 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Confirm Your Reservation</CardTitle>
-                  <CardDescription>Please review your booking details before confirming</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-20 h-20 bg-gray-100 rounded-md overflow-hidden">
-                        <img
-                          src={restaurant.image || "/placeholder.svg"}
-                          alt={restaurant.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-lg">{restaurant.name}</h3>
-                        <p className="text-sm text-gray-500">
-                          {restaurant.cuisine} • {restaurant.priceRange}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-b py-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-sm text-gray-500">Date</p>
-                          <p className="font-medium">{formatDate(selectedDate)}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Time</p>
-                          <p className="font-medium">{selectedTime}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Guests</p>
-                          <p className="font-medium">{selectedGuests} people</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Table</p>
-                          <p className="font-medium">
-                            {restaurant.tables.find((t) => t.id.toString() === selectedTable)?.name || ""}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {specialRequests && (
-                      <div>
-                        <p className="text-sm text-gray-500">Special Requests</p>
-                        <p>{specialRequests}</p>
-                      </div>
-                    )}
-
-                    <div className="bg-yellow-50 p-4 rounded-md">
-                      <p className="text-sm text-yellow-800">
-                        Please note that we hold your table for 15 minutes after the reservation time. If you need to
-                        cancel or modify your reservation, please do so at least 2 hours in advance.
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-                <CardFooter className="flex justify-between">
-                  <Button variant="outline" onClick={handlePreviousStep}>
-                    Back
-                  </Button>
-                  <Button onClick={handleConfirmBooking}>Confirm Reservation</Button>
-                </CardFooter>
-              </Card>
-            )}
-          </div>
-        )}
-      </div>
-
-      <Navigation />
-    </div>
-  )
-}
-
+                                htmlFor={`table-${table.id}`

@@ -1,3 +1,21 @@
+"use client"
+
+import React from 'react'
+
+// Example implementation with React.use() for params
+export default function ExcursionPage({ params }: { params: { id: string } }) {
+  // Unwrap params using React.use()
+  const unwrappedParams = React.use(params as any) as { id: string }
+  const excursionId = unwrappedParams.id
+  
+  return (
+    <div>
+      <h1>Excursion ID: {excursionId}</h1>
+      <p>This is an example of properly accessing route parameters using React.use()</p>
+    </div>
+  );
+}
+
 // Since the existing code was omitted for brevity and the updates indicate undeclared variables,
 // I will assume the code uses variables like 'brevity', 'it', 'is', 'correct', and 'and' without declaration or import.
 // A common cause is missing imports from a utility library or helper functions.
