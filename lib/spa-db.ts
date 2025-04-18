@@ -171,12 +171,12 @@ export class SpaDB {
         throw new Error("Required database tables do not exist. Please check your database setup.");
       }
       
-      // First, get the basic spa data
+      // First, get the basic spa data - use maybeSingle to prevent errors when no rows found
       const { data, error } = await this.supabase
         .from('admin_spas')
         .select('*')
         .eq('id', id)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error(`Error fetching spa with id ${id}:`, error);
@@ -184,6 +184,7 @@ export class SpaDB {
       }
 
       if (!data) {
+        console.log(`No spa found with id ${id}`);
         return null;
       }
 
@@ -422,7 +423,7 @@ export class SpaDB {
           booking_count:admin_spa_bookings(count)
         `)
         .eq('id', id)
-        .single();
+        .maybeSingle();
 
       if (error) {
         // Check for specific error types
