@@ -70,8 +70,18 @@ export default function EditRestaurantPage({ params }: { params: { id: string } 
             <ChevronLeft className="mr-2 h-4 w-4" /> Back to Restaurants
           </Button>
           
-          <h1 className="text-3xl font-bold">Edit Restaurant</h1>
-          <p className="text-gray-500">Update restaurant information</p>
+          <div className="flex justify-between items-end">
+            <div>
+              <h1 className="text-3xl font-bold">Edit Restaurant</h1>
+              <p className="text-gray-500">Update restaurant information</p>
+            </div>
+            <Button
+              onClick={() => router.push(`/admin/restaurants/${restaurantId}/menu`)}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Manage Menu
+            </Button>
+          </div>
         </div>
         
         {loading ? (

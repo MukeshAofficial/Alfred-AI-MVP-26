@@ -28,9 +28,8 @@ export default function RestaurantDetailPage() {
   const { profile } = useAuth()
   const { toast } = useToast()
   
-  // Unwrap params using React.use() with proper typing
-  const unwrappedParams = React.use(params as unknown as any) as { id: string }
-  const restaurantId = Array.isArray(unwrappedParams.id) ? unwrappedParams.id[0] : unwrappedParams.id
+  // Get restaurant ID from params safely
+  const restaurantId = params.id as string
   
   const [restaurant, setRestaurant] = useState<AdminRestaurant | null>(null)
   const [menuItems, setMenuItems] = useState<AdminRestaurantMenuItem[]>([])
