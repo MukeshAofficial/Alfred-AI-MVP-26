@@ -1,7 +1,160 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { AdminRestaurant, AdminRestaurantMenuItem, AdminRestaurantTable, AdminRestaurantBooking, RestaurantFormData, RestaurantMenuItemFormData, RestaurantTableFormData, RestaurantBookingFormData, AdminRestaurantReview, AdminRestaurantOffer } from '@/types/restaurant'
+import { AdminRestaurantMenu, RestaurantMenuFormData, AdminRestaurantMenuCategory, RestaurantMenuCategoryFormData } from '@/types/restaurant-menu'
 
 export class RestaurantDB {
+  // --- MENU CRUD ---
+  async getMenusByRestaurantId(restaurantId: string): Promise<AdminRestaurantMenu[]> {
+    try {
+      const { data, error } = await this.supabase
+        .from('admin_restaurant_menus')
+        .select('*')
+        .eq('restaurant_id', restaurantId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching menus:', error);
+      return [];
+    }
+  }
+
+  async getMenuById(menuId: string): Promise<AdminRestaurantMenu | null> {
+    try {
+      const { data, error } = await this.supabase
+        .from('admin_restaurant_menus')
+        .select('*')
+        .eq('id', menuId)
+        .single();
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error fetching menu by id:', error);
+      return null;
+    }
+  }
+
+  async createMenu(menuData: RestaurantMenuFormData): Promise<AdminRestaurantMenu | null> {
+    try {
+      const { data, error } = await this.supabase
+        .from('admin_restaurant_menus')
+        .insert(menuData)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error creating menu:', error);
+      return null;
+    }
+  }
+
+  async updateMenu(menuId: string, menuData: Partial<RestaurantMenuFormData>): Promise<AdminRestaurantMenu | null> {
+    try {
+      const { data, error } = await this.supabase
+        .from('admin_restaurant_menus')
+        .update(menuData)
+        .eq('id', menuId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error updating menu:', error);
+      return null;
+    }
+  }
+
+  async deleteMenu(menuId: string): Promise<boolean> {
+    try {
+      const { error } = await this.supabase
+        .from('admin_restaurant_menus')
+        .delete()
+        .eq('id', menuId);
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error deleting menu:', error);
+      return false;
+    }
+  }
+
+  // --- CATEGORY CRUD ---
+  async getCategoriesByMenuId(menuId: string): Promise<AdminRestaurantMenuCategory[]> {
+    try {
+      const { data, error } = await this.supabase
+        .from('admin_restaurant_menu_categories')
+        .select('*')
+        .eq('menu_id', menuId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      return [];
+    }
+  }
+
+  async getCategoryById(categoryId: string): Promise<AdminRestaurantMenuCategory | null> {
+    try {
+      const { data, error } = await this.supabase
+        .from('admin_restaurant_menu_categories')
+        .select('*')
+        .eq('id', categoryId)
+        .single();
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error fetching category by id:', error);
+      return null;
+    }
+  }
+
+  async createCategory(categoryData: RestaurantMenuCategoryFormData): Promise<AdminRestaurantMenuCategory | null> {
+    try {
+      const { data, error } = await this.supabase
+        .from('admin_restaurant_menu_categories')
+        .insert(categoryData)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error creating category:', error);
+      return null;
+    }
+  }
+
+  async updateCategory(categoryId: string, categoryData: Partial<RestaurantMenuCategoryFormData>): Promise<AdminRestaurantMenuCategory | null> {
+    try {
+      const { data, error } = await this.supabase
+        .from('admin_restaurant_menu_categories')
+        .update(categoryData)
+        .eq('id', categoryId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error updating category:', error);
+      return null;
+    }
+  }
+
+  async deleteCategory(categoryId: string): Promise<boolean> {
+    try {
+      const { error } = await this.supabase
+        .from('admin_restaurant_menu_categories')
+        .delete()
+        .eq('id', categoryId);
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      return false;
+    }
+  }
+
   private supabase;
   private static instance: RestaurantDB;
 

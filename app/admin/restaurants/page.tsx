@@ -16,6 +16,22 @@ import { RestaurantDB } from "@/lib/restaurant-db"
 import { AdminRestaurant } from "@/types/restaurant"
 
 export default function AdminRestaurantsPage() {
+  // Helper to safely access opening hours for a day
+  function getOpeningHour(restaurant: AdminRestaurant, day: string): string {
+    if (!restaurant || !restaurant.opening_hours) return 'Closed';
+    let hours = restaurant.opening_hours;
+    if (typeof hours === 'string') {
+      try {
+        hours = JSON.parse(hours);
+      } catch {
+        return 'Closed';
+      }
+    }
+    if (!hours[day] || typeof hours[day] !== 'object') return 'Closed';
+    const start = hours[day].start || '--:--';
+    const end = hours[day].end || '--:--';
+    return `${start} - ${end}`;
+  }
   const router = useRouter()
   const { toast } = useToast()
   const [restaurants, setRestaurants] = useState<AdminRestaurant[]>([])

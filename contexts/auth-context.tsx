@@ -101,7 +101,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     // Separate function to fetch from API
+    // Debounce guard to prevent overlapping session fetches
+    let isFetchingSession = false;
     const fetchSessionFromAPI = async (showLoading = true) => {
+      if (isFetchingSession) return;
+      isFetchingSession = true;
       try {
         const {
           data: { session },
@@ -129,6 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } finally {
+        isFetchingSession = false;
         if (showLoading) setIsLoading(false);
       }
     };
@@ -252,84 +257,71 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (error) {
-        console.error("Login error:", error);
-        return { error, success: false }
+      // Prevent multiple login attempts at once
+      if (window.__alfred_login_in_progress) {
+        return { error: new Error("Login already in progress. Please wait."), success: false };
       }
+      window.__alfred_login_in_progress = true;
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
 
-      // Fetch the user's profile to get their role
-      if (data.user) {
-        console.log("User signed in successfully:", data.user.email);
-        
-        // Clear any cached profile data first
-        setProfile(null);
-        
-        const { data: profileData, error: profileError } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", data.user.id)
-          .single();
-          
-        if (profileError || !profileData) {
-          console.error("Error fetching profile during login:", profileError);
-          return { error: profileError || new Error("Could not fetch user profile"), success: false };
+        if (error) {
+          console.error("Login error:", error);
+          return { error, success: false };
         }
-        
-        // Set the profile directly here
-        console.log("User profile fetched with role:", profileData.role);
-        setProfile(profileData as Profile);
-        
-        // Check if there's a specific service path in the URL or redirectedFrom parameter
-        const currentPath = window.location.pathname;
-        const searchParams = new URLSearchParams(window.location.search);
-        const redirectedFrom = searchParams.get('redirectedFrom');
-        
-        const isServicesPath = currentPath.includes('/vendor/services');
-        const redirectToServices = redirectedFrom && redirectedFrom.startsWith('/vendor/services');
-        
-        // Only redirect if not trying to access a specific services path or being redirected to one
-        if (!isServicesPath && !redirectToServices) {
-          // Redirect based on role
-          console.log("Redirecting based on role:", profileData.role);
-          
-          // Use a slightly longer timeout to ensure state is updated
-          setTimeout(() => {
-            switch (profileData.role) {
-              case "admin":
-                console.log("Redirecting admin to /admin/dashboard");
-                router.push("/admin/dashboard");
-                break;
-              case "vendor":
-                console.log("Redirecting vendor to /vendor/dashboard");
-                router.push("/vendor/dashboard");
-                break;
-              case "guest":
-                console.log("Redirecting guest to /explore");
-                router.push("/explore");
-                break;
-              default:
-                console.log("No role detected, redirecting to home");
-                router.push("/");
-            }
-          }, 200);
-        } else if (redirectToServices && profileData.role === 'vendor') {
-          // If the user was trying to access a vendor services page and is a vendor,
-          // redirect them there directly
-          console.log("Redirecting vendor to requested services page:", redirectedFrom);
-          setTimeout(() => {
-            router.push(redirectedFrom as string);
-          }, 200);
-        } else {
-          console.log("User is accessing vendor services or being redirected to one, not automatic redirecting");
+
+        // Fetch the user's profile to get their role
+        if (data.user) {
+          console.log("User signed in successfully:", data.user.email);
+          // Clear any cached profile data first
+          setProfile(null);
+          // Only fetch profile once
+          const { data: profileData, error: profileError } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", data.user.id)
+            .single();
+          if (profileError || !profileData) {
+            console.error("Error fetching profile during login:", profileError);
+            return { error: profileError || new Error("Could not fetch user profile"), success: false };
+          }
+          // Set the profile directly here
+          setProfile(profileData as Profile);
+          // Redirect only once
+          const currentPath = window.location.pathname;
+          const searchParams = new URLSearchParams(window.location.search);
+          const redirectedFrom = searchParams.get('redirectedFrom');
+          const isServicesPath = currentPath.includes('/vendor/services');
+          const redirectToServices = redirectedFrom && redirectedFrom.startsWith('/vendor/services');
+          if (!isServicesPath && !redirectToServices) {
+            setTimeout(() => {
+              switch (profileData.role) {
+                case "admin":
+                  router.push("/admin/dashboard");
+                  break;
+                case "vendor":
+                  router.push("/vendor/dashboard");
+                  break;
+                case "guest":
+                  router.push("/explore");
+                  break;
+                default:
+                  router.push("/");
+              }
+            }, 200);
+          } else if (redirectToServices && profileData.role === 'vendor') {
+            setTimeout(() => {
+              router.push(redirectedFrom as string);
+            }, 200);
+          }
         }
+        return { error: null, success: true };
+      } finally {
+        window.__alfred_login_in_progress = false;
       }
-
-      return { error: null, success: true }
     } catch (error) {
       console.error("Unexpected error during login:", error);
       return { error: error as Error, success: false }

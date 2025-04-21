@@ -15,6 +15,22 @@ import { RestaurantDB } from "@/lib/restaurant-db"
 import { AdminRestaurant } from "@/types/restaurant"
 
 export default function RestaurantsPage() {
+  // Helper to safely access opening hours for a day
+  function getOpeningHour(restaurant: AdminRestaurant, day: string): string {
+    if (!restaurant || !restaurant.opening_hours) return 'Closed';
+    let hours = restaurant.opening_hours;
+    if (typeof hours === 'string') {
+      try {
+        hours = JSON.parse(hours);
+      } catch {
+        return 'Closed';
+      }
+    }
+    if (!hours[day] || typeof hours[day] !== 'object') return 'Closed';
+    const start = hours[day].start || '--:--';
+    const end = hours[day].end || '--:--';
+    return `${start} - ${end}`;
+  }
   const router = useRouter()
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
@@ -215,7 +231,7 @@ export default function RestaurantsPage() {
                   <div className="flex items-center text-xs text-gray-500">
                     <Clock className="h-3 w-3 mr-1" />
                     <span>
-                      Opens: {restaurant.opening_hours.monday.start} - {restaurant.opening_hours.monday.end}
+                      Opens: {getOpeningHour(restaurant, 'monday')}
                     </span>
                   </div>
                 </CardContent>

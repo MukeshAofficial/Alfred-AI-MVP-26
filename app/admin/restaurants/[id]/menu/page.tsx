@@ -19,44 +19,62 @@ import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/hooks/use-toast"
 import { RestaurantDB } from "@/lib/restaurant-db"
 import { AdminRestaurant, AdminRestaurantMenuItem, RestaurantMenuItemFormData } from "@/types/restaurant"
+import { AdminRestaurantMenu, AdminRestaurantMenuCategory, RestaurantMenuFormData, RestaurantMenuCategoryFormData } from "@/types/restaurant-menu"
 
 export default function RestaurantMenuPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const { toast } = useToast()
   const restaurantDb = RestaurantDB.getInstance()
-  
+
   // Unwrap params using React.use()
   const unwrappedParams = React.use(params)
   const restaurantId = unwrappedParams.id
-  
+
   const [restaurant, setRestaurant] = useState<AdminRestaurant | null>(null)
+  const [menus, setMenus] = useState<AdminRestaurantMenu[]>([])
+  const [categories, setCategories] = useState<AdminRestaurantMenuCategory[]>([])
+  const [selectedMenuId, setSelectedMenuId] = useState<string>("")
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("")
   const [menuItems, setMenuItems] = useState<AdminRestaurantMenuItem[]>([])
   const [loading, setLoading] = useState(true)
   const [menuDbError, setMenuDbError] = useState<string | null>(null)
-  
+  const [menuLoading, setMenuLoading] = useState(false)
+  const [categoryLoading, setCategoryLoading] = useState(false)
+  const [menuError, setMenuError] = useState<string | null>(null)
+  const [categoryError, setCategoryError] = useState<string | null>(null)
+
   // Form states
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [currentMenuItem, setCurrentMenuItem] = useState<AdminRestaurantMenuItem | null>(null)
   const [activeCategory, setActiveCategory] = useState<string>("all")
-  
+
   const [formData, setFormData] = useState<RestaurantMenuItemFormData>({
     name: "",
     description: "",
     restaurant_id: restaurantId,
+    menu_id: "",
+    category_id: "",
     price: 0,
     currency: "USD",
-    category: "main",
     is_available: true,
     is_featured: false,
   })
-  
+
   useEffect(() => {
     fetchRestaurantData()
-    fetchMenuItems()
+    fetchMenus()
   }, [restaurantId])
-  
+
+  useEffect(() => {
+    if(selectedMenuId) fetchCategories(selectedMenuId)
+  }, [selectedMenuId])
+
+  useEffect(() => {
+    if(selectedCategoryId) fetchMenuItems(selectedCategoryId)
+  }, [selectedCategoryId])
+
   const fetchRestaurantData = async () => {
     try {
       const restaurantData = await restaurantDb.getRestaurantById(restaurantId)
@@ -70,50 +88,76 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
       })
     }
   }
-  
-  const fetchMenuItems = async () => {
+
+  const fetchMenus = async () => {
+    setMenuLoading(true)
+    setMenuError(null)
+    try {
+      const menus = await restaurantDb.getMenusByRestaurantId(restaurantId)
+      setMenus(menus)
+      if (menus.length > 0) setSelectedMenuId(menus[0].id)
+    } catch (error) {
+      setMenuError("Failed to load menus.")
+    } finally {
+      setMenuLoading(false)
+    }
+  }
+
+  const fetchCategories = async (menuId: string) => {
+    setCategoryLoading(true)
+    setCategoryError(null)
+    try {
+      const cats = await restaurantDb.getCategoriesByMenuId(menuId)
+      setCategories(cats)
+      if (cats.length > 0) setSelectedCategoryId(cats[0].id)
+    } catch (error) {
+      setCategoryError("Failed to load categories.")
+    } finally {
+      setCategoryLoading(false)
+    }
+  }
+
+  const fetchMenuItems = async (categoryId: string) => {
     setLoading(true)
     setMenuDbError(null)
     try {
-      // Check if tables exist first
-      const tablesExist = await restaurantDb.checkTablesExist()
-      if (!tablesExist.menuItemsExist) {
-        setMenuDbError("Menu items database table does not exist. The system needs to be initialized.")
-        setLoading(false)
-        return
-      }
-      
-      // Fetch menu items
-      const items = await restaurantDb.getRestaurantMenuItemsByRestaurantId(restaurantId)
+      // Fetch menu items for the selected category
+      const items = await restaurantDb.getRestaurantMenuItemsByCategoryId(categoryId)
       setMenuItems(items)
     } catch (error) {
-      console.error("Error fetching menu items:", error)
       setMenuDbError("Failed to load menu items. Please try again.")
     } finally {
       setLoading(false)
     }
   }
-  
+
   const handleInputChange = (field: string, value: any) => {
     setFormData({
       ...formData,
       [field]: value,
     })
+    if(field === 'menu_id') {
+      setSelectedMenuId(value)
+      setFormData(f => ({...f, category_id: ""}))
+    }
+    if(field === 'category_id') {
+      setSelectedCategoryId(value)
+    }
   }
-  
+
   const handleAddMenuItem = async () => {
     try {
       const menuItem = await restaurantDb.createRestaurantMenuItem({
         ...formData,
         restaurant_id: restaurantId,
       })
-      
+
       if (menuItem) {
         toast({
           title: "Success",
           description: `Menu item "${formData.name}" has been added.`,
         })
-        fetchMenuItems()
+        fetchMenuItems(selectedCategoryId)
         setIsAddDialogOpen(false)
         resetForm()
       } else {
@@ -128,22 +172,22 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
       })
     }
   }
-  
+
   const handleEditMenuItem = async () => {
     if (!currentMenuItem) return
-    
+
     try {
       const updatedMenuItem = await restaurantDb.updateRestaurantMenuItem(
         currentMenuItem.id,
         formData
       )
-      
+
       if (updatedMenuItem) {
         toast({
           title: "Success",
           description: `Menu item "${formData.name}" has been updated.`,
         })
-        fetchMenuItems()
+        fetchMenuItems(selectedCategoryId)
         setIsEditDialogOpen(false)
         resetForm()
       } else {
@@ -158,19 +202,19 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
       })
     }
   }
-  
+
   const handleDeleteMenuItem = async () => {
     if (!currentMenuItem) return
-    
+
     try {
       const success = await restaurantDb.deleteRestaurantMenuItem(currentMenuItem.id)
-      
+
       if (success) {
         toast({
           title: "Success",
           description: `Menu item "${currentMenuItem.name}" has been deleted.`,
         })
-        fetchMenuItems()
+        fetchMenuItems(selectedCategoryId)
         setIsDeleteDialogOpen(false)
       } else {
         throw new Error("Failed to delete menu item")
@@ -184,43 +228,43 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
       })
     }
   }
-  
+
   const openEditDialog = (item: AdminRestaurantMenuItem) => {
     setCurrentMenuItem(item)
     setFormData({
       name: item.name,
       description: item.description,
       restaurant_id: item.restaurant_id,
+      menu_id: item.menu_id,
+      category_id: item.category_id,
       price: item.price,
       currency: item.currency,
-      category: item.category,
-      dietary_info: item.dietary_info,
       is_available: item.is_available,
       is_featured: item.is_featured,
-      images: item.images,
     })
     setIsEditDialogOpen(true)
   }
-  
+
   const openDeleteDialog = (item: AdminRestaurantMenuItem) => {
     setCurrentMenuItem(item)
     setIsDeleteDialogOpen(true)
   }
-  
+
   const resetForm = () => {
     setFormData({
       name: "",
       description: "",
       restaurant_id: restaurantId,
+      menu_id: "",
+      category_id: "",
       price: 0,
       currency: "USD",
-      category: "main",
       is_available: true,
       is_featured: false,
     })
     setCurrentMenuItem(null)
   }
-  
+
   const formatPrice = (price: number, currency: string) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -228,14 +272,6 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
     }).format(price)
   }
 
-  // Get all unique categories from menu items
-  const categories = ["all", ...new Set(menuItems.map(item => item.category))]
-  
-  // Filter menu items by category
-  const filteredMenuItems = activeCategory === "all" 
-    ? menuItems 
-    : menuItems.filter(item => item.category === activeCategory)
-  
   return (
     <div className="container py-8">
       <div className="flex items-center justify-between mb-6">
@@ -253,7 +289,7 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
           </Button>
         </div>
       </div>
-      
+
       {menuDbError && (
         <Alert className="mb-6 bg-amber-50 border-amber-200 text-amber-800">
           <AlertCircle className="h-4 w-4" />
@@ -261,21 +297,21 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
           <AlertDescription>{menuDbError}</AlertDescription>
         </Alert>
       )}
-      
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Menu Items</CardTitle>
               <CardDescription>
-                {filteredMenuItems.length} item{filteredMenuItems.length !== 1 ? 's' : ''} {activeCategory !== 'all' ? `in ${activeCategory}` : ''}
+                {menuItems.length} item{menuItems.length !== 1 ? 's' : ''} {activeCategory !== 'all' ? `in ${activeCategory}` : ''}
               </CardDescription>
             </div>
-            <Tabs value={activeCategory} onValueChange={setActiveCategory} className="w-full max-w-md">
+            <Tabs value={selectedMenuId} onValueChange={setSelectedMenuId} className="w-full max-w-md">
               <TabsList className="grid grid-cols-3 sm:grid-cols-5">
-                {categories.map(category => (
-                  <TabsTrigger key={category} value={category} className="capitalize">
-                    {category}
+                {menus.map(menu => (
+                  <TabsTrigger key={menu.id} value={menu.id} className="capitalize">
+                    {menu.name}
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -289,9 +325,9 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
                 <div key={i} className="bg-gray-100 h-20 rounded-md"></div>
               ))}
             </div>
-          ) : filteredMenuItems.length > 0 ? (
+          ) : menuItems.length > 0 ? (
             <div className="space-y-4">
-              {filteredMenuItems.map((menuItem) => (
+              {menuItems.map((menuItem) => (
                 <div key={menuItem.id} className="flex items-center justify-between border rounded-md p-4">
                   <div className="flex items-center space-x-4">
                     <div className={`w-3 h-3 rounded-full ${menuItem.is_available ? 'bg-green-500' : 'bg-red-500'}`}></div>
@@ -304,12 +340,12 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
                       </div>
                       <p className="text-sm text-gray-500 line-clamp-1">{menuItem.description}</p>
                       <div className="flex items-center space-x-2 text-sm">
-                        <Badge variant="outline" className="capitalize">{menuItem.category}</Badge>
+                        <Badge variant="outline" className="capitalize">{menuItem.category_id}</Badge>
                         <span className="font-medium">{formatPrice(menuItem.price, menuItem.currency)}</span>
                       </div>
                     </div>
                   </div>
-                  
+
                   <div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -346,7 +382,7 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
           )}
         </CardContent>
       </Card>
-      
+
       {/* Add Menu Item Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
@@ -356,7 +392,7 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
               Create a new menu item for {restaurant?.name || 'this restaurant'}.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="grid grid-cols-1 gap-4 py-4">
             <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="name">Item Name</Label>
@@ -368,7 +404,7 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
                 required
               />
             </div>
-            
+
             <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="description">Description</Label>
               <Textarea
@@ -380,7 +416,7 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
                 required
               />
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="grid grid-cols-1 gap-2">
                 <Label htmlFor="price">Price</Label>
@@ -395,7 +431,7 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
                   required
                 />
               </div>
-              
+
               <div className="grid grid-cols-1 gap-2">
                 <Label htmlFor="currency">Currency</Label>
                 <Select
@@ -413,27 +449,42 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
                 </Select>
               </div>
             </div>
-            
+
+            <div className="grid grid-cols-1 gap-2">
+              <Label htmlFor="menu">Menu</Label>
+              <Select
+                value={formData.menu_id}
+                onValueChange={(value) => handleInputChange("menu_id", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select menu" />
+                </SelectTrigger>
+                <SelectContent>
+                  {menus.map(menu => (
+                    <SelectItem key={menu.id} value={menu.id}>{menu.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="category">Category</Label>
               <Select
-                value={formData.category}
-                onValueChange={(value) => handleInputChange("category", value)}
+                value={formData.category_id}
+                onValueChange={(value) => handleInputChange("category_id", value)}
+                disabled={!formData.menu_id}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="starters">Starters</SelectItem>
-                  <SelectItem value="mains">Main Courses</SelectItem>
-                  <SelectItem value="sides">Side Dishes</SelectItem>
-                  <SelectItem value="desserts">Desserts</SelectItem>
-                  <SelectItem value="drinks">Drinks</SelectItem>
-                  <SelectItem value="specials">Specials</SelectItem>
+                  {categories.map(cat => (
+                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="flex items-center space-x-8 pt-2">
               <div className="flex items-center space-x-2">
                 <Switch
@@ -443,7 +494,7 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
                 />
                 <Label htmlFor="is_available">Available</Label>
               </div>
-              
+
               <div className="flex items-center space-x-2">
                 <Switch
                   id="is_featured"
@@ -454,7 +505,7 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
               </div>
             </div>
           </div>
-          
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
               Cancel
@@ -465,7 +516,7 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      
+
       {/* Edit Menu Item Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
@@ -475,7 +526,7 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
               Update details for this menu item.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="grid grid-cols-1 gap-4 py-4">
             <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="edit-name">Item Name</Label>
@@ -487,7 +538,7 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
                 required
               />
             </div>
-            
+
             <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="edit-description">Description</Label>
               <Textarea
@@ -499,7 +550,7 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
                 required
               />
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="grid grid-cols-1 gap-2">
                 <Label htmlFor="edit-price">Price</Label>
@@ -514,7 +565,7 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
                   required
                 />
               </div>
-              
+
               <div className="grid grid-cols-1 gap-2">
                 <Label htmlFor="edit-currency">Currency</Label>
                 <Select
@@ -532,27 +583,42 @@ export default function RestaurantMenuPage({ params }: { params: { id: string } 
                 </Select>
               </div>
             </div>
-            
+
+            <div className="grid grid-cols-1 gap-2">
+              <Label htmlFor="edit-menu">Menu</Label>
+              <Select
+                value={formData.menu_id}
+                onValueChange={(value) => handleInputChange("menu_id", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select menu" />
+                </SelectTrigger>
+                <SelectContent>
+                  {menus.map(menu => (
+                    <SelectItem key={menu.id} value={menu.id}>{menu.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="edit-category">Category</Label>
               <Select
-                value={formData.category}
-                onValueChange={(value) => handleInputChange("category", value)}
+                value={formData.category_id}
+                onValueChange={(value) => handleInputChange("category_id", value)}
+                disabled={!formData.menu_id}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="starters">Starters</SelectItem>
-                  <SelectItem value="mains">Main Courses</SelectItem>
-                  <SelectItem value="sides">Side Dishes</SelectItem>
-                  <SelectItem value="desserts">Desserts</SelectItem>
-                  <SelectItem value="drinks">Drinks</SelectItem>
-                  <SelectItem value="specials">Specials</SelectItem>
+                  {categories.map(cat => (
+                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="flex items-center space-x-8 pt-2">
               <div className="flex items-center space-x-2">
                 <Switch

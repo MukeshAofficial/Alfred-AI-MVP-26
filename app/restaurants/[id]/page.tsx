@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, MapPin, Star, Calendar, Utensils, MoreVertical, Clock, Users, DollarSign, Info, ChevronRight } from "lucide-react"
+import { ArrowLeft, MapPin, Star, Calendar, Utensils, MoreVertical, Clock, Users, DollarSign, Info, ChevronRight, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -23,6 +23,23 @@ import { Loader2 } from "lucide-react"
 import { format } from "date-fns"
 
 export default function RestaurantDetailPage() {
+  // Helper to safely access opening hours
+  function getOpeningHour(day: string) {
+    if (!restaurant || !restaurant.opening_hours) return 'Closed';
+    // Handle stringified JSON or object
+    let hours = restaurant.opening_hours;
+    if (typeof hours === 'string') {
+      try {
+        hours = JSON.parse(hours);
+      } catch {
+        return 'Closed';
+      }
+    }
+    if (!hours[day] || typeof hours[day] !== 'object') return 'Closed';
+    const start = hours[day].start || '--:--';
+    const end = hours[day].end || '--:--';
+    return `${start} - ${end}`;
+  }
   const params = useParams()
   const router = useRouter()
   const { profile } = useAuth()
@@ -261,7 +278,7 @@ export default function RestaurantDetailPage() {
                         <CardTitle className="text-lg">Weekdays</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <p>{restaurant.opening_hours.monday.start} - {restaurant.opening_hours.monday.end}</p>
+                        <p>{getOpeningHour('monday')}</p>
                       </CardContent>
                     </Card>
                     <Card>
@@ -269,7 +286,7 @@ export default function RestaurantDetailPage() {
                         <CardTitle className="text-lg">Saturdays</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <p>{restaurant.opening_hours.saturday.start} - {restaurant.opening_hours.saturday.end}</p>
+                        <p>{getOpeningHour('saturday')}</p>
                       </CardContent>
                     </Card>
                     <Card>
@@ -277,7 +294,7 @@ export default function RestaurantDetailPage() {
                         <CardTitle className="text-lg">Sundays</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <p>{restaurant.opening_hours.sunday.start} - {restaurant.opening_hours.sunday.end}</p>
+                        <p>{getOpeningHour('sunday')}</p>
                       </CardContent>
                     </Card>
                   </div>
